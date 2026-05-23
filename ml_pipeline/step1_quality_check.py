@@ -1,32 +1,64 @@
-import pandas as pd
+"""
+step1_quality_check.py — kiểm tra chất lượng dữ liệu trước khi tiền xử lý.
+
+3 nhóm check cho mỗi user:
+  1. Thời lượng inertial (walking/standing/sitting) đạt target.
+  2. Số lượng touch gesture (tap/scroll/keystroke) đạt target.
+  3. Outlier session — session nào có touch behavior lệch hẳn các session
+     khác CỦA CÙNG USER (score ≥ OUTLIER_RATIO_THRESH × median user-score).
+
+Logic đếm + tách segment + sinh 48-D feature dùng trực tiếp functions
+của step2_preprocess.py để verdict step1 khớp với output step2.
+
+Yêu cầu: 2 file đặt cùng folder.
+"""
+from __future__ import annotations
+
 import numpy as np
+import pandas as pd
 from pathlib import Path
 
-# ── CONFIG ─────────────────────────────────────
-HZ = 50
-MAX_GAP_SEC = 5 / HZ
-WINDOW_SIZE = 2 * HZ
+from step2_preprocess import (
+    HZ, WINDOW_SIZE,
+    split_segments,
+    process_tap, process_scroll, process_keystroke,
+    aggregate_touch, TOUCH_COLS,
+)
 
-INERTIAL_TARGET_MIN = {
+# ── CONFIG ──────────────────────────────────────────────────────
+MAX_GAP_SEC = 5 / HZ        # gap > 0.1s coi như đứt đoạn
+
+INERTIAL_TARGET_MIN = {     # phút thu thực tế tối thiểu / activity / user
     'walking':  18,
     'standing': 18,
     'sitting':  18,
 }
 
-TOUCH_TARGET = {
+TOUCH_TARGET = {            # số lượng tối thiểu / loại / user
     'tap':       600,
     'scroll':    600,
     'keystroke': 600,
 }
 
-# ── FORMAT ─────────────────────────────────────
-def fmt_time(sec):
+# Outlier detection — robust scaling (median + MAD) per-user, không cần
+# scaler từ training. Phù hợp khi step1 chạy độc lập cho data mới.
+OUTLIER_RATIO_THRESH = 3.0     # score ≥ 3× median → outlier
+MIN_SESSIONS_FOR_Z   = 4       # < 4 session → skip check
+MAD_MIN              = 1e-6    # cột có MAD ≤ ngưỡng này coi như constant
+TOP_K_COLS           = 5       # số cột contribute lệch nhất in ra cho mỗi outlier
+
+
+# ── FORMAT HELPERS ──────────────────────────────────────────────
+def fmt_time(sec: float) -> str:
+    """Định dạng giây thành 'MpSSs', vd 19.5 → '0p19s'."""
     m = int(sec // 60)
     s = int(sec % 60)
     return f"{m}p{s:02d}s"
 
-def check_status(value, target, unit=""):
-    if isinstance(target, float) or unit == "time":
+
+def check_status(value, target, unit: str = "") -> str:
+    """Trả status string ('✓ ĐỦ' / '✗ THIẾU') kèm chênh lệch."""
+    if unit == "time":
         if value >= target:
             return f"✓ ĐỦ  (dư {fmt_time(value - target)})"
         return f"✗ THIẾU  (cần thêm ~{fmt_time(target - value)})"
@@ -35,65 +67,27 @@ def check_status(value, target, unit=""):
             return f"✓ ĐỦ  (dư {value - target})"
         return f"✗ THIẾU  (cần thêm {target - value})"
 
-# ═══════════════════════════════════════════════
-# INERTIAL HELPERS
-# ═══════════════════════════════════════════════
-def split_segments(df: pd.DataFrame, filename: str = "") -> list[pd.DataFrame]:
-    """
-    Tách DataFrame thành các đoạn liên tục, bỏ gap > MAX_GAP_SEC.
-    Hỗ trợ cả timestamp_ms (app mới) và timestamp_ns (app cũ).
-    """
-    if 'timestamp_ms' in df.columns:
-        ts_col, to_sec = 'timestamp_ms', 1e3
-    elif 'timestamp_ns' in df.columns:
-        ts_col, to_sec = 'timestamp_ns', 1e9
-    else:
-        return []
 
-    if len(df) < WINDOW_SIZE:
-        return []
-
-    df = df.sort_values(ts_col).reset_index(drop=True)
-    diffs = df[ts_col].diff() / to_sec
-
-    gap_pos = list(diffs[diffs > MAX_GAP_SEC].index)
-    if gap_pos:
-        total_gap = diffs[diffs > MAX_GAP_SEC].sum()
-        label = f"({filename})" if filename else ""
-        print(f"      ⚠  {label} {len(gap_pos)} gap — loại {total_gap:.1f}s")
-
-    boundaries = [0] + gap_pos + [len(df)]
-    segments = []
-    for i in range(len(boundaries) - 1):
-        seg = df.iloc[boundaries[i]:boundaries[i + 1]].copy().reset_index(drop=True)
-        seg['_ts_col'] = ts_col
-        seg['_to_sec'] = to_sec
-        if len(seg) >= WINDOW_SIZE:
-            segments.append(seg)
-    return segments
-
-def get_duration(df, filename="") -> float:
-    """Tính thời gian thu thực tế (giây), loại gap và đoạn quá ngắn."""
-    segments = split_segments(df, filename)
+# ── INERTIAL DURATION ───────────────────────────────────────────
+def get_duration(df: pd.DataFrame, filename: str = "") -> float:
+    """Thời gian thu thực tế (giây) sau khi loại gap và bỏ segment quá ngắn."""
+    segments = split_segments(df)
     if not segments:
+        if filename:
+            print(f"      ⚠  {filename}: 0 segment hợp lệ (≥ {WINDOW_SIZE} samples)")
         return 0.0
+
     total_sec = 0.0
     for seg in segments:
-        if len(seg) >= 2:
-            ts_col = seg['_ts_col'].iloc[0]
-            to_sec = seg['_to_sec'].iloc[0]
-            diffs  = seg[ts_col].diff().dropna() / to_sec
-            total_sec += diffs[diffs <= MAX_GAP_SEC].sum()
+        ts_col = 'timestamp_ms' if 'timestamp_ms' in seg.columns else 'timestamp_ns'
+        to_sec = 1e3 if ts_col == 'timestamp_ms' else 1e9
+        diffs  = seg[ts_col].diff().dropna() / to_sec
+        total_sec += diffs[diffs <= MAX_GAP_SEC].sum()
     return total_sec
 
-# ═══════════════════════════════════════════════
-# INERTIAL — per session
-# ═══════════════════════════════════════════════
+
 def collect_inertial(session_dir: Path) -> dict[str, float]:
-    """
-    Trả về {activity: total_seconds} cho một session.
-    File pattern: walking_att1.csv, standing_att1.csv, ...
-    """
+    """Tổng thời lượng (giây) của 3 activity trong 1 session."""
     result = {act: 0.0 for act in INERTIAL_TARGET_MIN}
     for act in INERTIAL_TARGET_MIN:
         for f in sorted(session_dir.glob(f"{act}_att*.csv")):
@@ -104,162 +98,139 @@ def collect_inertial(session_dir: Path) -> dict[str, float]:
                 print(f"      Lỗi {f.name}: {e}")
     return result
 
-# ═══════════════════════════════════════════════
-# TOUCH + KEYSTROKE HELPERS — per session
-# ═══════════════════════════════════════════════
-def count_tap(session_dir: Path) -> int:
-    """
-    File pattern: tap_r1.csv, tap_r2.csv, ...
-    Logic: ghép DOWN→UP liền kề, hold_ms ∈ [0, 500).
-    """
-    total = 0
-    for f in sorted(session_dir.glob("tap_r*.csv")):
-        try:
-            df = pd.read_csv(f)
-            ts_col = 'timestamp_ms' if 'timestamp_ms' in df.columns else 'timestamp'
-            df = df.sort_values(ts_col).reset_index(drop=True)
 
-            if 'phase' not in df.columns:
-                total += len(df)
-                continue
+# ── TOUCH / KEYSTROKE ───────────────────────────────────────────
+def collect_touch_counts(
+    session_dir: Path, session_id: str
+) -> tuple[dict[str, int], pd.DataFrame | None]:
+    """Trả (counts theo loại, 48-D feature row của session)."""
+    tap_df = process_tap     (session_dir, session_id)
+    sc_df  = process_scroll  (session_dir, session_id)
+    key_df = process_keystroke(session_dir, session_id)
 
-            hold_col = 'hold_ms' if 'hold_ms' in df.columns else 'holdMs'
-            for i in range(1, len(df)):
-                row, prev = df.iloc[i], df.iloc[i - 1]
-                if row['phase'] != 'UP' or prev['phase'] != 'DOWN':
-                    continue
-                hold = row.get(hold_col, -1)
-                if 0 <= hold < 500:
-                    total += 1
-        except Exception as e:
-            print(f"      Lỗi tap {f.name}: {e}")
-    return total
-
-def count_scroll(session_dir: Path) -> int:
-    """
-    File pattern: scroll_r1.csv, scroll_r2.csv, ...
-    Logic: ghép DOWN→MOVE...→UP theo pointer_id, ≥3 điểm, dt ∈ (10, 5000) ms.
-    """
-    total = 0
-    for f in sorted(session_dir.glob("scroll_r*.csv")):
-        try:
-            df = pd.read_csv(f)
-            ts_col  = 'timestamp_ms' if 'timestamp_ms' in df.columns else 'timestamp'
-            ptr_col = 'pointer_id'   if 'pointer_id'   in df.columns else 'pointerId'
-            df = df.sort_values(ts_col).reset_index(drop=True)
-
-            if 'phase' not in df.columns or ptr_col not in df.columns:
-                continue
-
-            for ptr in df[ptr_col].unique():
-                ptr_df = df[df[ptr_col] == ptr]
-                in_g, gesture = False, []
-                for _, row in ptr_df.iterrows():
-                    if row['phase'] == 'DOWN':
-                        in_g, gesture = True, [row]
-                    elif in_g:
-                        gesture.append(row)
-                        if row['phase'] == 'UP':
-                            if len(gesture) >= 3:
-                                g  = pd.DataFrame(gesture)
-                                dt = g[ts_col].iloc[-1] - g[ts_col].iloc[0]
-                                if 10 < dt < 5000:
-                                    total += 1
-                            in_g, gesture = False, []
-        except Exception as e:
-            print(f"      Lỗi scroll {f.name}: {e}")
-    return total
-
-def count_keystroke(session_dir: Path) -> int:
-    """
-    File pattern: keystroke_r1.csv, keystroke_r2.csv, ...
-    Logic: bỏ inter_key_ms=0, bỏ is_delete, bỏ outlier >3000 ms.
-    """
-    dfs = []
-    for f in sorted(session_dir.glob("keystroke_r*.csv")):
-        try:
-            dfs.append(pd.read_csv(f))
-        except Exception as e:
-            print(f"      Lỗi keystroke {f.name}: {e}")
-    if not dfs:
-        return 0
-
-    df = pd.concat(dfs, ignore_index=True)
-    key_col = 'inter_key_ms' if 'inter_key_ms' in df.columns else 'interKeyMs'
-    del_col = 'is_delete'    if 'is_delete'    in df.columns else 'isDelete'
-
-    df = df[df[key_col] > 0]
-    if del_col in df.columns:
-        df = df[df[del_col] == False]
-    df = df[df[key_col] < 3000]
-    return len(df)
-
-def collect_touch(session_dir: Path) -> dict[str, int]:
-    """Trả về {metric: count} cho một session."""
-    return {
-        'tap':       count_tap(session_dir),
-        'scroll':    count_scroll(session_dir),
-        'keystroke': count_keystroke(session_dir),
+    counts = {
+        'tap':       len(tap_df),
+        'scroll':    len(sc_df),
+        'keystroke': len(key_df),
     }
 
-# ═══════════════════════════════════════════════
-# SESSION CHECK
-# ═══════════════════════════════════════════════
-def check_session(session_dir: Path) -> tuple[dict, dict]:
-    """
-    In kết quả kiểm tra cho một session, trả về (inertial_dict, touch_dict)
-    để tổng hợp ở cấp user.
-    """
+    feat_dict = aggregate_touch(tap_df, sc_df, key_df, session_id)
+    feat_row  = pd.DataFrame([feat_dict]) if feat_dict else None
+    return counts, feat_row
+
+
+# ── SESSION-LEVEL CHECK ─────────────────────────────────────────
+def check_session(session_dir: Path) -> tuple[dict, dict, pd.DataFrame | None]:
+    """In kết quả 1 session, trả (inertial_secs, touch_counts, touch_feature_row)."""
     print(f"\n  ┌─ {session_dir.name} ─────────────────")
 
     inertial = collect_inertial(session_dir)
-    touch    = collect_touch(session_dir)
+    counts, feat_row = collect_touch_counts(session_dir, session_dir.name)
 
-    # ── Inertial ──────────────────────────────
     print("  │  [Inertial]")
     for act, sec in inertial.items():
         print(f"  │    {act:<10}: {fmt_time(sec):>8}")
 
-    # ── Touch / Keystroke ─────────────────────
     print("  │  [Touch / Keystroke]")
-    for metric, count in touch.items():
+    for metric, count in counts.items():
         print(f"  │    {metric:<10}: {count:>5}")
 
     print("  └" + "─" * 40)
-    return inertial, touch
+    return inertial, counts, feat_row
 
-# ═══════════════════════════════════════════════
-# USER CHECK  (per-session → tổng kết)
-# ═══════════════════════════════════════════════
-def check_user(user_dir: Path):
+
+# ── OUTLIER DETECTION ───────────────────────────────────────────
+def detect_outlier_sessions(
+    feat_table: pd.DataFrame,
+) -> tuple[dict[str, dict], dict[str, float]]:
+    """Phát hiện session lệch hẳn các session khác của cùng user.
+
+    Quy trình:
+      1. Robust-scale 48 feature bằng median + MAD (per-column) trên toàn user.
+      2. Score per session = median khoảng cách Euclidean tới các session khác,
+         chuẩn hóa theo √n_features.
+      3. Flag session nếu score ≥ OUTLIER_RATIO_THRESH × median(score).
+
+    feat_table: DataFrame index = session_id, cột = 48 touch features.
+    Trả về:
+      outliers   = {session_id: {'score', 'ratio', 'top_cols'}}
+      all_scores = {session_id: score}
+    """
+    outliers:   dict[str, dict]  = {}
+    all_scores: dict[str, float] = {}
+    n = len(feat_table)
+    if n < MIN_SESSIONS_FOR_Z:
+        return outliers, all_scores
+
+    X   = feat_table.values.astype(np.float64)
+    med = np.median(X, axis=0)
+    mad = np.median(np.abs(X - med), axis=0) * 1.4826
+
+    valid_mask = mad > MAD_MIN
+    if not valid_mask.any():
+        return outliers, all_scores
+
+    Xs         = (X[:, valid_mask] - med[valid_mask]) / mad[valid_mask]
+    valid_cols = feat_table.columns[valid_mask].tolist()
+    n_eff_feat = Xs.shape[1]
+
+    for i, sess_id in enumerate(feat_table.index):
+        dists = [np.linalg.norm(Xs[i] - Xs[j]) / np.sqrt(n_eff_feat)
+                 for j in range(n) if j != i]
+        all_scores[sess_id] = float(np.median(dists))
+
+    median_score = max(float(np.median(list(all_scores.values()))), 1e-6)
+
+    for i, sess_id in enumerate(feat_table.index):
+        score = all_scores[sess_id]
+        ratio = score / median_score
+        if ratio < OUTLIER_RATIO_THRESH:
+            continue
+
+        abs_z    = np.abs(Xs[i])
+        top_idx  = np.argsort(-abs_z)[:TOP_K_COLS]
+        top_cols = [(valid_cols[c], float(Xs[i, c])) for c in top_idx]
+        outliers[sess_id] = {
+            'score':    score,
+            'ratio':    ratio,
+            'top_cols': top_cols,
+        }
+
+    return outliers, all_scores
+
+
+# ── USER-LEVEL CHECK ────────────────────────────────────────────
+def check_user(user_dir: Path) -> bool:
+    """Chạy đủ 3 nhóm check cho 1 user. Trả True nếu đạt mọi tiêu chí."""
     print("\n" + "=" * 54)
     print(f"  USER: {user_dir.name}")
     print("=" * 54)
 
     sessions = sorted(
         [d for d in user_dir.iterdir() if d.is_dir() and d.name.startswith("session_")],
-        key=lambda d: int(d.name.split("_")[1]) if d.name.split("_")[1].isdigit() else 0
+        key=lambda d: int(d.name.split("_")[1]) if d.name.split("_")[1].isdigit() else 0,
     )
-
     if not sessions:
         print("  ⚠️  Không tìm thấy session nào.")
-        return
+        return False
 
-    # Tích lũy qua từng session
-    total_inertial = {act: 0.0 for act in INERTIAL_TARGET_MIN}
-    total_touch    = {m: 0    for m  in TOUCH_TARGET}
+    total_inertial: dict[str, float] = {act: 0.0 for act in INERTIAL_TARGET_MIN}
+    total_touch:    dict[str, int]   = {m: 0    for m   in TOUCH_TARGET}
+    feat_rows: list[pd.DataFrame] = []
 
     for session_dir in sessions:
-        inertial, touch = check_session(session_dir)
+        inertial, counts, feat_row = check_session(session_dir)
         for act in total_inertial:
             total_inertial[act] += inertial[act]
         for m in total_touch:
-            total_touch[m] += touch[m]
+            total_touch[m] += counts[m]
+        if feat_row is not None and len(feat_row):
+            feat_rows.append(feat_row)
 
-    # ── Tổng kết toàn user ──────────────────────
-    print(f"\n  {'━'*52}")
+    # ── Tổng kết thời lượng + count ─────────────────────────────
+    print(f"\n  {'━' * 52}")
     print(f"  TỔNG KẾT  ({len(sessions)} session)")
-    print(f"  {'━'*52}")
+    print(f"  {'━' * 52}")
 
     all_ok = True
 
@@ -279,18 +250,59 @@ def check_user(user_dir: Path):
             all_ok = False
         print(f"    {metric:<10}: {count:>5} / {tgt:<5}  {st}")
 
-    verdict = "✓  DỮ LIỆU ĐẦY ĐỦ" if all_ok else "✗  CÒN THIẾU DỮ LIỆU"
-    print(f"\n  {verdict}")
-
-# ═══════════════════════════════════════════════
-# RUN
-# ═══════════════════════════════════════════════
-if __name__ == "__main__":
-    data_dir = Path("./data")
-
-    user_dirs = sorted([d for d in data_dir.iterdir() if d.is_dir()])
-    if not user_dirs:
-        print("Không tìm thấy user nào trong ./data")
+    # ── Outlier session ──────────────────────────────────────────
+    print(f"\n  [Outlier check] ({len(feat_rows)} session có touch features)")
+    if len(feat_rows) < MIN_SESSIONS_FOR_Z:
+        print(f"    ⊘  Chỉ có {len(feat_rows)} session — cần ≥ {MIN_SESSIONS_FOR_Z} "
+              f"để median ổn định. Bỏ qua check này.")
     else:
+        feat_table = pd.concat(feat_rows, ignore_index=False).set_index('session_id')
+        outliers, all_scores = detect_outlier_sessions(feat_table)
+
+        median_score = float(np.median(list(all_scores.values())))
+        print(f"    Median session-score = {median_score:.2f}  "
+              f"(score càng nhỏ = session càng giống các session khác)")
+        for s, sc in sorted(all_scores.items(), key=lambda kv: -kv[1]):
+            ratio = sc / max(median_score, 1e-6)
+            flag  = "  ← OUTLIER" if s in outliers else ""
+            print(f"      {s:<14} score={sc:>5.2f}  (×{ratio:.2f} median){flag}")
+
+        if not outliers:
+            print(f"    ✓ Không phát hiện session outlier "
+                  f"(ngưỡng: score ≥ {OUTLIER_RATIO_THRESH:.1f}× median).")
+        else:
+            all_ok = False
+            print(f"\n    ✗ {len(outliers)} session lệch hẳn các session khác:")
+            for sess_id, info in outliers.items():
+                print(f"      • {sess_id}  (score={info['score']:.2f}, "
+                      f"= {info['ratio']:.1f}× median, top {len(info['top_cols'])} cột:")
+                for col, z in info['top_cols']:
+                    sign = "+" if z > 0 else ""
+                    print(f"          {col:<28} robust_z = {sign}{z:>6.2f}")
+            print(f"\n      → Khuyến nghị: kiểm tra điều kiện thu ở các session trên,")
+            print(f"        hoặc thu lại để protocol nhất quán với các session còn lại.")
+
+    verdict = "✓  DỮ LIỆU ĐẦY ĐỦ VÀ NHẤT QUÁN" if all_ok \
+              else "✗  CẦN BỔ SUNG / KIỂM TRA LẠI DỮ LIỆU"
+    print(f"\n  {verdict}")
+    return all_ok
+
+
+# ── ENTRY ───────────────────────────────────────────────────────
+if __name__ == "__main__":
+    data_dir  = Path("./data")
+    user_dirs = sorted([d for d in data_dir.iterdir() if d.is_dir()])
+
+    if not user_dirs:
+        print(f"Không tìm thấy user nào trong {data_dir}")
+    else:
+        n_pass = n_fail = 0
         for user_dir in user_dirs:
-            check_user(user_dir)
+            if check_user(user_dir):
+                n_pass += 1
+            else:
+                n_fail += 1
+
+        print("\n" + "=" * 54)
+        print(f"  TỔNG: {n_pass} user PASS, {n_fail} user cần xem lại")
+        print("=" * 54)

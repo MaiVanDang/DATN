@@ -160,7 +160,14 @@ with st.sidebar:
     if st.button("🎯 Enroll", type="primary", use_container_width=True):
         with st.spinner(f"Training per-user RF cho {owner_id}..."):
             try:
-                enrollment = enroll(owner_id, n_enroll, owner_dir, encoder, artifacts)
+                # Khi owner là newbie, pool âm tính phải đến từ COHORT, không phải
+                # newbie_dir — nếu không RF sẽ học sai phân phối và cohort impostor
+                # ở Tab 3 bị nhận nhầm là TRUSTED.
+                impostor_dir_for_enroll = (
+                    data_dir if pool_label == 'newbie' else owner_dir
+                )
+                enrollment = enroll(owner_id, n_enroll, owner_dir, encoder, artifacts,
+                                    impostor_dir=impostor_dir_for_enroll)
                 st.session_state['enrollment'] = enrollment
                 st.session_state['n_enroll'] = n_enroll
                 st.session_state['n_total_sessions'] = n_total_sessions
@@ -171,8 +178,9 @@ with st.sidebar:
                             'last_batch_results', 'last_newbie_results']:
                     st.session_state.pop(key, None)
                 st.success(f"✓ Enrolled {owner_id} ({pool_label}) với "
-                           f"{n_enroll}/{n_total_sessions} sessions "
-                           f"(fusion_w = {enrollment.fusion_w:.2f})")
+                           f"{n_enroll}/{n_total_sessions} sessions | "
+                           f"fusion_w = {enrollment.fusion_w:.2f} | "
+                           f"threshold = {enrollment.adaptive_threshold:.3f}")
             except Exception as e:
                 st.error(f"Lỗi enrollment: {e}")
                 import traceback
@@ -180,20 +188,45 @@ with st.sidebar:
 
     st.divider()
     st.header("⚖️ Threshold")
-    threshold = st.slider(
-        "Decision threshold",
-        min_value=0.10, max_value=0.90,
-        value=0.50, step=0.01,
-        help="Tăng → reject nhiều hơn (FAR ↓, FRR ↑). Giảm → accept dễ hơn (FAR ↑, FRR ↓).",
+
+    enrolled = st.session_state.get('enrollment')
+    adaptive_thr = enrolled.adaptive_threshold if enrolled else 0.5
+
+    use_adaptive = st.toggle(
+        "Dùng adaptive threshold (EER)",
+        value=True,
+        help=(
+            "Bật: threshold tính tự động từ điểm EER trên val set lúc enroll "
+            "(tối ưu FAR = FRR cho user này). "
+            "Tắt: chỉnh tay bằng slider."
+        ),
     )
+
+    if use_adaptive:
+        threshold = adaptive_thr
+        if enrolled:
+            st.caption(
+                f"Threshold = **{threshold:.3f}** (EER từ val set enrollment)"
+            )
+        else:
+            st.caption("Enroll trước để tính adaptive threshold.")
+    else:
+        threshold = st.slider(
+            "Decision threshold (manual)",
+            min_value=0.10, max_value=0.90,
+            value=float(round(adaptive_thr, 2)), step=0.01,
+            help="Tăng → reject nhiều hơn (FAR ↓, FRR ↑). Giảm → accept dễ hơn (FAR ↑, FRR ↓).",
+        )
+
     st.session_state['threshold'] = threshold
 
-    if 'enrollment' in st.session_state:
-        e = st.session_state['enrollment']
+    if enrolled:
+        e = enrolled
         pool_emoji = "🆕" if st.session_state.get('owner_pool') == 'newbie' else "📚"
         st.info(
             f"**Active**: {pool_emoji} {e.owner_id}\n\n"
             f"Sessions: {', '.join(e.enroll_sessions)}\n\n"
+            f"fusion_w = {e.fusion_w:.2f} | thr = {e.adaptive_threshold:.3f}\n\n"
             f"RF inertial: ✓ {e.rf_inertial.n_estimators} trees\n\n"
             f"RF touch: {'✓ trained' if e.rf_touch else '✗ skipped (insufficient touch data)'}"
         )
@@ -285,8 +318,8 @@ def render_score_breakdown_chart(df: pd.DataFrame):
         color_discrete_map={'inertial': '#4C72B0', 'touch': '#DD8452', 'fused': '#55A868'},
         range_y=[0, 1],
     )
-    fig.add_hline(y=0.5, line_dash="dash", line_color="gray",
-                  annotation_text="Decision threshold (0.5)")
+    fig.add_hline(y=threshold, line_dash="dash", line_color="gray",
+                  annotation_text=f"Threshold {threshold:.3f}")
     fig.update_layout(height=400)
     st.plotly_chart(fig, use_container_width=True)
 
@@ -386,12 +419,37 @@ with tab2:
 
 # ─── TAB 3: Batch on all impostors ────────────────────────────────
 with tab3:
-    st.subheader(f"Test trên TẤT CẢ {len(users)-1} users khác — tính FAR thực tế")
+    # Owner có thể là newbie (không nằm trong `users` cohort), nên đếm theo
+    # thực tế thay vì len(users)-1.
+    cohort_impostors = [u for u in users if u != enrollment.owner_id]
+    n_cohort_impostors = len(cohort_impostors)
 
-    n_per_user = st.slider("Số session/user khi test", 1, 3, 1, key="batch_n")
+    st.subheader(f"Test trên TẤT CẢ {n_cohort_impostors} users khác — tính FAR thực tế")
+
+    # Max sessions/user = số session ít nhất mà mọi cohort impostor có
+    # (để slider không vượt qua số session thực có của bất kỳ user nào).
+    max_sessions_avail = 1
+    if cohort_impostors:
+        per_user_counts = []
+        for u in cohort_impostors:
+            try:
+                per_user_counts.append(len(load_user_inertial(u, data_dir)))
+            except Exception:
+                pass
+        if per_user_counts:
+            max_sessions_avail = max(1, min(per_user_counts))
+
+    n_per_user = st.slider(
+        "Số session/user khi test",
+        min_value=1,
+        max_value=max_sessions_avail,
+        value=min(2, max_sessions_avail),
+        key="batch_n",
+        help=f"Tối đa {max_sessions_avail} (số session ít nhất trong các cohort user)",
+    )
 
     if st.button("▶ Run batch verification", key="run_batch", type="primary"):
-        with st.spinner(f"Verifying {(len(users)-1) * n_per_user} sessions..."):
+        with st.spinner(f"Verifying {n_cohort_impostors * n_per_user} sessions..."):
             df = verify_batch_impostors(enrollment, data_dir, encoder,
                                         n_sessions_per_user=n_per_user)
             st.session_state['last_batch_results'] = df
@@ -444,8 +502,8 @@ with tab3:
                 barmode='overlay',
                 height=400,
             )
-            fig.add_vline(x=0.5, line_dash="dash", line_color="gray",
-                         annotation_text="Threshold 0.5")
+            fig.add_vline(x=threshold, line_dash="dash", line_color="gray",
+                         annotation_text=f"Threshold {threshold:.3f}")
             st.plotly_chart(fig, use_container_width=True)
 
         # Sort by fused score
@@ -480,39 +538,64 @@ with tab4:
             f"└── newbie2/\n    └── ...\n```"
         )
     else:
-        col_a, col_b = st.columns([2, 1])
-        with col_a:
-            mode = st.radio(
-                "Test mode",
-                ["Single newbie (chi tiết)", "All newbies (batch)"],
-                key="newbie_mode",
-                horizontal=True,
-            )
-        with col_b:
-            n_sess_newbie = st.slider("Sessions/newbie", 1, 5, 2, key="newbie_n_sess")
+        # Loại owner ra khỏi danh sách newbie cần test — nếu owner CHÍNH là 1
+        # newbie thì họ không phải "unseen" với chính bản thân nữa, và sẽ làm
+        # nhiễu metric FAR (owner luôn TRUSTED → tăng false-accept ảo).
+        newbie_pool = [u for u in newbie_users if u != enrollment.owner_id]
 
-        if mode == "Single newbie (chi tiết)":
-            picked = st.selectbox("Pick newbie", newbie_users, key="newbie_pick")
-            if st.button("▶ Run newbie test", key="run_newbie_single", type="primary"):
-                with st.spinner(f"Testing {picked}..."):
-                    sessions_dict = load_user_inertial(picked, newbie_dir)
-                    test_sess = sorted(sessions_dict.keys())[:n_sess_newbie]
-                    df = verify_user_sessions(enrollment, picked, test_sess,
-                                              newbie_dir, encoder)
-                    st.session_state['last_newbie_results'] = df
+        if not newbie_pool:
+            st.info(
+                f"Owner hiện tại (`{enrollment.owner_id}`) là newbie duy nhất "
+                f"trong `{newbie_dir}`. Thêm newbie khác để chạy unseen-user test."
+            )
         else:
-            if st.button(f"▶ Batch test trên TẤT CẢ {len(newbie_users)} newbies",
-                        key="run_newbie_batch", type="primary"):
-                with st.spinner(f"Testing {len(newbie_users)} newbies..."):
-                    all_rows = []
-                    for nb in newbie_users:
-                        sessions_dict = load_user_inertial(nb, newbie_dir)
-                        keys = sorted(sessions_dict.keys())[:n_sess_newbie]
-                        for s in keys:
-                            row = verify_session(enrollment, nb, s, newbie_dir, encoder)
-                            all_rows.append(row)
-                    df = pd.DataFrame(all_rows)
-                    st.session_state['last_newbie_results'] = df
+            col_a, col_b = st.columns([2, 1])
+            with col_a:
+                mode = st.radio(
+                    "Test mode",
+                    ["Single newbie (chi tiết)", "All newbies (batch)"],
+                    key="newbie_mode",
+                    horizontal=True,
+                )
+            with col_b:
+                # Max sessions/newbie = min số session trong pool, tránh slider
+                # vượt quá số thực có. Trước đây hard-code max=5.
+                per_nb_counts = []
+                for nb in newbie_pool:
+                    try:
+                        per_nb_counts.append(len(load_user_inertial(nb, newbie_dir)))
+                    except Exception:
+                        pass
+                max_sess_newbie = max(1, min(per_nb_counts) if per_nb_counts else 1)
+                n_sess_newbie = st.slider(
+                    "Sessions/newbie",
+                    1, max_sess_newbie, min(2, max_sess_newbie),
+                    key="newbie_n_sess",
+                    help=f"Tối đa {max_sess_newbie} (số session ít nhất trong các newbie test)",
+                )
+
+            if mode == "Single newbie (chi tiết)":
+                picked = st.selectbox("Pick newbie", newbie_pool, key="newbie_pick")
+                if st.button("▶ Run newbie test", key="run_newbie_single", type="primary"):
+                    with st.spinner(f"Testing {picked}..."):
+                        sessions_dict = load_user_inertial(picked, newbie_dir)
+                        test_sess = sorted(sessions_dict.keys())[:n_sess_newbie]
+                        df = verify_user_sessions(enrollment, picked, test_sess,
+                                                  newbie_dir, encoder)
+                        st.session_state['last_newbie_results'] = df
+            else:
+                if st.button(f"▶ Batch test trên TẤT CẢ {len(newbie_pool)} newbies",
+                            key="run_newbie_batch", type="primary"):
+                    with st.spinner(f"Testing {len(newbie_pool)} newbies..."):
+                        all_rows = []
+                        for nb in newbie_pool:
+                            sessions_dict = load_user_inertial(nb, newbie_dir)
+                            keys = sorted(sessions_dict.keys())[:n_sess_newbie]
+                            for s in keys:
+                                row = verify_session(enrollment, nb, s, newbie_dir, encoder)
+                                all_rows.append(row)
+                        df = pd.DataFrame(all_rows)
+                        st.session_state['last_newbie_results'] = df
 
         if 'last_newbie_results' in st.session_state:
             df = apply_threshold(st.session_state['last_newbie_results'], threshold)
@@ -566,8 +649,8 @@ with tab4:
                     nbinsx=20, name='Newbie (UNSEEN)',
                     marker_color='#C44E52', opacity=0.9,
                 ))
-                fig.add_vline(x=0.5, line_dash="dash", line_color="gray",
-                              annotation_text="Threshold 0.5")
+                fig.add_vline(x=threshold, line_dash="dash", line_color="gray",
+                              annotation_text=f"Threshold {threshold:.3f}")
                 fig.update_layout(
                     title="Score distribution: Owner vs In-cohort Impostor vs UNSEEN Newbie",
                     xaxis_title="Fused P(owner)",
@@ -595,8 +678,9 @@ with tab4:
 
 st.divider()
 st.caption(
-    "Methodology: Train per-user RF (inertial 128-D embedding + touch 27-D), "
-    "fuse với w=0.5, decision threshold = 0.5. "
-    "Impostor pool built on-the-fly từ non-owner users (no leakage). "
-    "Tương ứng với training pipeline Active_Auth V5."
+    "Methodology: Train per-user RF (inertial 128-D embedding + touch 48-D), "
+    "tune fusion_w bằng grid-search AUC trên held-out val session. "
+    "Adaptive threshold tính tại điểm EER từ val set lúc enroll — "
+    "không cần chỉnh tay, hoạt động cho cả cohort lẫn newbie users. "
+    "Impostor pool built on-the-fly (no leakage). Pipeline Active_Auth V5."
 )

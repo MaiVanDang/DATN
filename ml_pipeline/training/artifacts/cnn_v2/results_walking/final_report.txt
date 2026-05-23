@@ -1,0 +1,13 @@
+=== FINAL REPORT — Active Authentication Pipeline v4 ===
+
+Users: ['user1', 'user10', 'user12', 'user13', 'user14', 'user15', 'user16', 'user18', 'user19', 'user2', 'user20', 'user21', 'user22', 'user23', 'user24', 'user25', 'user3', 'user4', 'user5', 'user6', 'user7', 'user8', 'user9']
+Runs: 10
+Total time: 22.3 min
+
+Overall (mean ± std qua runs):
+  auc_inertial  : 0.9821 ± 0.0062
+  auc_touch     : 0.9748 ± 0.0213
+  auc_fusion    : 0.9965 ± 0.0019
+  eer_fusion    : 0.0120 ± 0.0031
+  far_at_eer    : 0.0119 ± 0.0031
+  frr_at_eer    : 0.0126 ± 0.0035

@@ -20,7 +20,7 @@ import torch
 from pathlib import Path
 from typing import Optional
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, roc_curve
 
 from touch_features import build_session_features, FEAT_DIM as TOUCH_DIM, FEATURE_COLS
 
@@ -88,13 +88,14 @@ def list_available_users(data_dir: Path) -> list:
 
 
 def load_user_inertial(user_id: str, data_dir: Path) -> dict:
-    """Load inertial data. Ưu tiên X_inertial.npy (all activities), fallback về X_walking.npy."""
+    """Load inertial data. Dùng X_walking.npy — backbone train trên walking only.
+    Fallback về X_inertial.npy nếu không có X_walking.npy."""
     user_dir = data_dir / user_id
-    x_path = user_dir / 'X_inertial.npy'
-    y_path = user_dir / 'y_inertial.npy'
+    x_path = user_dir / 'X_walking.npy'
+    y_path = user_dir / 'y_walking.npy'
     if not x_path.exists():
-        x_path = user_dir / 'X_walking.npy'
-        y_path = user_dir / 'y_walking.npy'
+        x_path = user_dir / 'X_inertial.npy'
+        y_path = user_dir / 'y_inertial.npy'
     X = np.load(x_path)
     sess = np.load(y_path, allow_pickle=True)
     sessions = {}
@@ -188,13 +189,15 @@ def _build_touch_impostor_pool(owner_id: str,
 
 class Enrollment:
     def __init__(self, owner_id, enroll_sessions, rf_inertial, rf_touch,
-                 artifacts: V5Artifacts, fusion_w: float):
+                 artifacts: V5Artifacts, fusion_w: float,
+                 adaptive_threshold: float = 0.5):
         self.owner_id = owner_id
         self.enroll_sessions = enroll_sessions
         self.rf_inertial = rf_inertial
         self.rf_touch = rf_touch
         self.artifacts = artifacts
         self.fusion_w = fusion_w
+        self.adaptive_threshold = adaptive_threshold
 
 
 def _build_inertial_impostor_pool(owner_id: str,
@@ -239,8 +242,17 @@ def enroll(owner_id: str,
            data_dir: Path,
            encoder: torch.nn.Module,
            artifacts: V5Artifacts,
-           seed: int = 42) -> Enrollment:
-    """Train per-user RF for inertial + touch using V5 pre-built pools."""
+           seed: int = 42,
+           impostor_dir: Path | None = None) -> Enrollment:
+    """Train per-user RF for inertial + touch using V5 pre-built pools.
+
+    impostor_dir : thư mục lấy pool ÂM tính. Mặc định = data_dir (khi owner là
+        cohort user). Khi owner là NEWBIE, app phải truyền impostor_dir = cohort
+        data_dir riêng, nếu không pool sẽ chỉ chứa newbie khác → RF train sai
+        phân phối → cohort user bị nhận nhầm là TRUSTED ở Tab 3.
+    """
+    if impostor_dir is None:
+        impostor_dir = data_dir
 
     sessions = load_user_inertial(owner_id, data_dir)
     session_keys = sorted(sessions.keys())
@@ -265,7 +277,7 @@ def enroll(owner_id: str,
     owner_windows = np.concatenate([sessions[s] for s in rf_keys], axis=0)
     owner_embeds = extract_embeddings(encoder, owner_windows)
 
-    inertial_pool = _build_inertial_impostor_pool(owner_id, data_dir, encoder,
+    inertial_pool = _build_inertial_impostor_pool(owner_id, impostor_dir, encoder,
                                                    artifacts, seed)
     X_in = np.concatenate([owner_embeds, inertial_pool], axis=0)
     y_in = np.array([1] * len(owner_embeds) + [0] * len(inertial_pool))
@@ -294,7 +306,7 @@ def enroll(owner_id: str,
         owner_touch_scaled = artifacts.transform_touch(owner_touch_arr).astype(np.float32)
 
         # Pool PHẢI loại owner ra — tránh owner data nằm trong negative class
-        impostor_touch = _build_touch_impostor_pool(owner_id, data_dir, artifacts)
+        impostor_touch = _build_touch_impostor_pool(owner_id, impostor_dir, artifacts)
         X_t = np.concatenate([owner_touch_scaled, impostor_touch], axis=0)
         y_t = np.array([1] * len(owner_touch_scaled) + [0] * len(impostor_touch))
 
@@ -308,8 +320,8 @@ def enroll(owner_id: str,
         )
         rf_touch.fit(X_t, y_t)
 
-    # ── Tune fusion_w bằng grid search (val_key là held-out, không trong RF train) ──
-    fusion_w = _tune_fusion_w(
+    # ── Tune fusion_w + compute adaptive threshold từ held-out val set ──
+    fusion_w, adaptive_threshold = _tune_enrollment_params(
         owner_id=owner_id,
         val_key=val_key,
         data_dir=data_dir,
@@ -317,73 +329,114 @@ def enroll(owner_id: str,
         rf_inertial=rf_inertial,
         rf_touch=rf_touch,
         artifacts=artifacts,
+        impostor_dir=impostor_dir,
     )
 
     return Enrollment(owner_id, enroll_keys, rf_inertial, rf_touch,
-                      artifacts, fusion_w)
+                      artifacts, fusion_w, adaptive_threshold)
 
 
-def _tune_fusion_w(owner_id, val_key, data_dir, encoder,
-                   rf_inertial, rf_touch, artifacts: V5Artifacts) -> float:
+def _find_eer_threshold(y_true: np.ndarray, scores: np.ndarray) -> float:
     """
-    Grid-search w ∈ [0,1] (51 steps) trên held-out val set.
-    Val set = val_key (session KHÔNG nằm trong RF training) + 1 session từ mỗi user khác.
-    Tie-break: ưu tiên w gần 0.5 (giống fusion.search_weight() trong V5).
+    Tìm threshold tại điểm EER (Equal Error Rate): FAR ≈ FRR.
+    Dùng sklearn roc_curve — trả về threshold ∈ [0, 1].
     """
-    if rf_touch is None:
-        return 1.0  # pure inertial
+    if len(np.unique(y_true)) < 2:
+        return 0.5
+    fpr, tpr, thresholds = roc_curve(y_true, scores)
+    fnr = 1.0 - tpr
+    eer_idx = int(np.argmin(np.abs(fpr - fnr)))
+    return float(np.clip(thresholds[eer_idx], 0.0, 1.0))
+
+
+def _tune_enrollment_params(owner_id, val_key, data_dir, encoder,
+                             rf_inertial, rf_touch,
+                             artifacts: V5Artifacts,
+                             impostor_dir: Path | None = None) -> tuple[float, float]:
+    """
+    Tính (fusion_w, adaptive_threshold) từ held-out val set.
+
+    - fusion_w  : grid-search AUC, 51 steps, tie-break về 0.5
+    - adaptive_threshold : threshold tại điểm EER trên val set với fusion_w tối ưu
+
+    Val set = val_key (session held-out, KHÔNG trong RF train) + 1 session/user khác.
+    Negatives lấy từ impostor_dir (mặc định = data_dir). Khi owner là newbie,
+    impostor_dir phải = cohort data_dir để threshold calibrate đúng phân phối.
+    Nếu val_key is None (< 4 enroll sessions) → trả về defaults (0.5, 0.5).
+    """
     if val_key is None:
-        return 0.5  # không đủ session để tune → dùng giá trị trung tâm
+        return (1.0 if rf_touch is None else 0.5), 0.5
 
-    # Build val set — val_key là held-out (không dùng để train RF)
-    val_data = [(owner_id, val_key, 1)]
-    other_users = [u for u in list_available_users(data_dir) if u != owner_id]
-    for u in other_users:
-        u_sess = load_user_inertial(u, data_dir)
+    if impostor_dir is None:
+        impostor_dir = data_dir
+
+    # ── Build val set ──────────────────────────────────────────────
+    val_data = [(owner_id, val_key, 1, data_dir)]
+    for u in list_available_users(impostor_dir):
+        if u == owner_id:
+            continue
+        try:
+            u_sess = load_user_inertial(u, impostor_dir)
+        except Exception:
+            continue
         if u_sess:
-            val_data.append((u, sorted(u_sess.keys())[0], 0))
+            val_data.append((u, sorted(u_sess.keys())[0], 0, impostor_dir))
 
-    s_i_val, s_t_val, y_val = [], [], []
-    for uid, sid, label in val_data:
-        u_sess = load_user_inertial(uid, data_dir)
+    # ── Collect per-window scores ──────────────────────────────────
+    s_i_all, s_t_all, y_all = [], [], []
+    for uid, sid, label, src_dir in val_data:
+        try:
+            u_sess = load_user_inertial(uid, src_dir)
+        except Exception:
+            continue
         if sid not in u_sess or len(u_sess[sid]) == 0:
             continue
 
         embeds = extract_embeddings(encoder, u_sess[sid])
         p_i = rf_inertial.predict_proba(embeds)[:, 1]
+        n = len(p_i)
 
-        v_t = build_session_features(data_dir / uid, {sid})
-        if v_t is None:
-            continue
-        v_scaled = artifacts.transform_touch(v_t.reshape(1, -1)).astype(np.float32)
-        p_t = float(rf_touch.predict_proba(v_scaled)[0, 1])
+        p_t = None
+        if rf_touch is not None:
+            v_t = build_session_features(src_dir / uid, {sid})
+            if v_t is not None:
+                v_sc = artifacts.transform_touch(v_t.reshape(1, -1)).astype(np.float32)
+                p_t = float(rf_touch.predict_proba(v_sc)[0, 1])
 
-        # Per-window: broadcast s_t cho từng window (giống V5)
-        s_i_val.extend(p_i.tolist())
-        s_t_val.extend([p_t] * len(p_i))
-        y_val.extend([label] * len(p_i))
+        s_i_all.extend(p_i.tolist())
+        s_t_all.extend([p_t if p_t is not None else 0.5] * n)
+        y_all.extend([label] * n)
 
-    s_i_val = np.array(s_i_val, dtype=np.float32)
-    s_t_val = np.array(s_t_val, dtype=np.float32)
-    y_val = np.array(y_val, dtype=np.float32)
+    s_i = np.array(s_i_all, dtype=np.float32)
+    s_t = np.array(s_t_all, dtype=np.float32)
+    y   = np.array(y_all,   dtype=np.float32)
 
-    if len(np.unique(y_val)) < 2:
-        return 0.5
+    if len(np.unique(y)) < 2:
+        return (1.0 if rf_touch is None else 0.5), 0.5
 
-    # Grid search, tie-break về 0.5
-    best_w, best_auc, best_dist = 0.5, -1.0, 1.0
-    for w in np.linspace(0.0, 1.0, 51):
-        s = w * s_i_val + (1 - w) * s_t_val
-        try:
-            auc = roc_auc_score(y_val, s)
-        except ValueError:
-            continue
-        dist = abs(w - 0.5)
-        if auc > best_auc + 1e-6:
-            best_auc, best_w, best_dist = auc, float(w), dist
-        elif abs(auc - best_auc) <= 1e-6 and dist < best_dist:
-            best_w, best_dist = float(w), dist
-    return best_w
+    # ── Grid-search fusion_w ───────────────────────────────────────
+    if rf_touch is None:
+        fusion_w = 1.0
+    else:
+        best_w, best_auc, best_dist = 0.5, -1.0, 1.0
+        for w in np.linspace(0.0, 1.0, 51):
+            s = w * s_i + (1 - w) * s_t
+            try:
+                auc = roc_auc_score(y, s)
+            except ValueError:
+                continue
+            dist = abs(w - 0.5)
+            if auc > best_auc + 1e-6:
+                best_auc, best_w, best_dist = auc, float(w), dist
+            elif abs(auc - best_auc) <= 1e-6 and dist < best_dist:
+                best_w, best_dist = float(w), dist
+        fusion_w = best_w
+
+    # ── Tính EER threshold từ fused scores với fusion_w tối ưu ────
+    fused_val = fusion_w * s_i + (1 - fusion_w) * s_t
+    adaptive_threshold = _find_eer_threshold(y, fused_val)
+
+    return fusion_w, adaptive_threshold
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -429,7 +482,7 @@ def verify_session(enrollment: Enrollment,
         fused = p_inertial
 
     is_owner = (test_user_id == enrollment.owner_id)
-    decision = 'TRUSTED' if fused >= 0.5 else 'REJECTED'
+    decision = 'TRUSTED' if fused >= enrollment.adaptive_threshold else 'REJECTED'
 
     return {
         'test_user': test_user_id,
