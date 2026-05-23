@@ -1,0 +1,67 @@
+\documentclass[../DoAn.tex]{subfiles}
+\begin{document}
+    \section{Đặt vấn đề}
+    \label{sec:dvd}
+
+    Trong bối cảnh khoa học công nghệ ngày càng phát triển mạnh mẽ, các hình thức tấn công và đánh cắp thông tin ngày càng trở nên tinh vi hơn. Khi thiết bị di động đã trở thành trung tâm lưu trữ thông tin cá nhân và tài chính của hàng tỷ người dùng, bài toán xác thực người dùng trên thiết bị di động đang nhận được sự quan tâm ngày càng lớn từ cộng đồng nghiên cứu.
+
+    Các phương pháp xác thực truyền thống hiện đang được sử dụng phổ biến vẫn tồn tại những hạn chế nhất định. Mã PIN và mật khẩu có thể bị nhìn trộm hoặc bị tấn công vét cạn. Xác thực bằng khuôn mặt có thể bị qua mặt bởi ảnh tĩnh, video hoặc mặt nạ 3D. Vân tay, dù khó tấn công hơn, vẫn có thể bị giả mạo qua dấu vân tay vật lý để lại trên bề mặt kính, đồng thời không áp dụng được khi tay người dùng bị ướt hoặc bẩn. Điểm yếu chung và nghiêm trọng nhất của tất cả các hình thức này là chúng \textbf{chỉ xác thực tại thời điểm mở khóa ban đầu}, không kiểm soát liên tục danh tính người dùng trong suốt phiên sử dụng. Việc bổ sung xác thực liên tục theo kiểu truyền thống --- yêu cầu nhập lại PIN hoặc quét vân tay định kỳ --- lại gây ra trải nghiệm người dùng kém, tạo ra sự đánh đổi khó chấp nhận giữa bảo mật và tiện dụng.
+
+    Sinh trắc học hành vi (\textit{Behavioral Biometrics}) nổi lên như một hướng tiếp cận đầy hứa hẹn để giải quyết đúng vấn đề trên. Hướng tiếp cận này khai thác các đặc trưng hành vi độc đáo của mỗi cá nhân --- cách họ di chuyển, cầm điện thoại, vuốt màn hình, gõ phím --- thông qua dữ liệu thu từ các cảm biến đã được tích hợp sẵn trên mọi điện thoại thông minh hiện đại. Ưu điểm nổi bật là khả năng xác thực liên tục và hoàn toàn trong suốt: hệ thống giám sát người dùng trong nền mà không yêu cầu bất kỳ thao tác chủ động nào, qua đó cải thiện trải nghiệm người dùng đồng thời tăng cường bảo mật.
+
+    Tuy nhiên, phần lớn các nghiên cứu hiện có vẫn còn những khoảng trống quan trọng. Nhiều hệ thống chỉ khai thác một nguồn dữ liệu duy nhất --- hoặc chỉ cảm biến chuyển động, hoặc chỉ dữ liệu tương tác màn hình --- khiến hiệu quả suy giảm đáng kể trong các tình huống thiết bị đứng yên hoặc người dùng không tương tác trực tiếp với màn hình. Quan trọng hơn, gần như tất cả các hệ thống đều thiếu khả năng phát hiện người dùng lạ (\textit{open-set recognition}) --- tức là chủ động từ chối và cảnh báo khi người dùng hiện tại không phải chủ sở hữu thiết bị --- đây là điều kiện bắt buộc để một hệ thống có giá trị triển khai thực tế. Ngoài ra, ngay cả khi phát hiện bất thường, các hệ thống hiện tại thường chỉ phản ứng bằng cách khóa màn hình đơn giản, chưa có cơ chế xác thực lại chủ động để khôi phục phiên sử dụng một cách an toàn.
+
+    Đề tài này được thực hiện nhằm giải quyết những khoảng trống trên bằng cách xây dựng một hệ thống xác thực hành vi đa modal hoàn chỉnh trên nền tảng Android. Hệ thống kết hợp đồng thời dữ liệu từ cảm biến quán tính (\textit{accelerometer}, \textit{gyroscope}, \textit{magnetometer}) với hành vi tương tác màn hình (\textit{tap dynamics}, \textit{scroll dynamics}, \textit{keystroke dynamics}), thực hiện toàn bộ quá trình suy luận trực tiếp trên thiết bị nhằm bảo vệ quyền riêng tư người dùng mà không phụ thuộc vào kết nối máy chủ. Đặc biệt, đề tài đề xuất một cơ chế xác thực dự phòng bằng cử chỉ lắc điện thoại cá nhân hóa khi phát hiện người dùng lạ --- một hướng tiếp cận chưa được khai thác trong các công trình tham chiếu --- nhằm đóng kín vòng lặp xác thực từ giai đoạn phát hiện bất thường đến khôi phục phiên sử dụng an toàn.
+
+    \section{Mục tiêu đề tài}
+    \label{sec:muctieu}
+
+    Đề tài hướng tới xây dựng một hệ thống xác thực hành vi liên tục hoàn chỉnh trên nền tảng Android, bao gồm ba nhóm mục tiêu cụ thể sau đây.
+
+    \subsection{Mục tiêu kỹ thuật}
+
+    Về mặt kỹ thuật, đề tài hướng tới các mục tiêu sau. Thứ nhất, xây dựng hệ thống xác thực đa phương thức kết hợp đồng thời hai nhóm tín hiệu bổ sung lẫn nhau: dữ liệu cảm biến quán tính 9 trục (\textit{accelerometer}, \textit{gyroscope}, \textit{magnetometer}) và dữ liệu hành vi tương tác màn hình (\textit{tap dynamics}, \textit{scroll dynamics}, \textit{keystroke dynamics}). Thứ hai, xây dựng pipeline huấn luyện mô hình gồm hai thành phần độc lập: mạng CNN 1D encoder trích xuất vector nhúng 128 chiều từ chuỗi thời gian IMU và bộ phân loại Random Forest trên vector đặc trưng 48 chiều của dữ liệu touch. Điểm xác thực cuối cùng được tổng hợp qua cơ chế \textit{Exponential Moving Average} (EMA) trên nhiều cửa sổ liên tiếp. Thứ ba, triển khai toàn bộ quá trình suy luận trực tiếp trên thiết bị thông qua TensorFlow Lite, không phụ thuộc vào kết nối máy chủ, đảm bảo quyền riêng tư người dùng và khả năng hoạt động ngoại tuyến. Thứ tư, xây dựng cơ chế phát hiện người dùng lạ dựa trên ngưỡng điểm tin cậy với ba trạng thái quyết định: TRUSTED, WARNING, UNKNOWN và cơ chế xác thực dự phòng bằng cử chỉ lắc điện thoại cá nhân khi phát hiện bất thường.
+
+    \subsection{Mục tiêu ứng dụng}
+
+    Về phía ứng dụng, đề tài xây dựng hai ứng dụng Android độc lập minh họa toàn bộ luồng hoạt động thực tế của hệ thống. Ứng dụng thu thập dữ liệu \textit{BioAuth Data Collection} phục vụ giai đoạn xây dựng bộ dữ liệu với Foreground Service thu cảm biến IMU theo cơ chế kích hoạt sự kiện và biểu mẫu chuẩn hóa thu hành vi touch theo ba loại tác vụ: trắc nghiệm, nhập văn bản và cuộn danh sách. Ứng dụng xác thực \textit{BioAuth Authenticator} là ứng dụng demo hoàn chỉnh tích hợp mô hình TFLite, thực hiện xác thực liên tục trong nền và kích hoạt cơ chế fallback khi cần. Ngoài ra, một web demo bằng Streamlit được xây dựng để trực quan hóa kết quả thực nghiệm và phục vụ việc trình bày tại buổi bảo vệ.
+
+    \subsection{Mục tiêu nghiên cứu}
+
+    Về mặt nghiên cứu, đề tài thực hiện đánh giá có hệ thống trên các tiêu chí sau. So sánh hiệu năng giữa các biến thể kiến trúc backbone: CNN 1D, ConvLSTM và ConvLSTM hai chiều (\textit{Bidirectional ConvLSTM}), từ đó lựa chọn kiến trúc phù hợp nhất để tích hợp vào hệ thống xác thực, theo các chỉ số FAR, FRR và EER. Đánh giá mức độ đóng góp của từng phương thức: inertial đơn lẻ, touch đơn lẻ, fusion đa modal nhằm làm rõ lợi ích thực sự của hướng tiếp cận đa phương thức. Đánh giá khả năng tổng quát hóa của hệ thống với người dùng chưa xuất hiện trong tập huấn luyện (\textit{open-set generalization}). Đánh giá hiệu năng on-device: độ trễ suy luận, kích thước mô hình sau lượng tử hóa và mức tiêu thụ tài nguyên thiết bị.
+
+    \section{Phạm vi nghiên cứu}
+    \label{sec:phamvi}
+
+    Đề tài tập trung vào bài toán xác thực người dùng thụ động, liên tục trên thiết bị Android thông qua kết hợp dữ liệu cảm biến quán tính và hành vi tương tác màn hình. Phạm vi bao gồm: nền tảng Android phiên bản 10 trở lên (API level 29+); phần cứng bắt buộc là gia tốc kế và con quay hồi chuyển, cảm biến từ trường là tùy chọn giúp cải thiện độ chính xác nhưng không bắt buộc; bộ dữ liệu thu thập trong môi trường có kiểm soát từ 25 người tham gia với ba hoạt động chuẩn hóa là đi bộ, đứng và ngồi. Ba hoạt động trên được sử dụng làm ngữ cảnh huấn luyện để đa dạng hóa dữ liệu, không phải là tầng nhận diện hoạt động thời gian thực. Phạm vi không bao gồm: các phương pháp sinh trắc học sinh lý truyền thống như khuôn mặt, vân tay, mống mắt; bảo mật tầng mạng, mã hóa truyền thông hay quản lý phiên phía máy chủ; kiểm thử đa thiết bị hoặc cập nhật mô hình trực tuyến; thu thập dữ liệu trong môi trường thực tế không kiểm soát.
+    
+    \section{Đóng góp của đề tài}
+    \label{sec:donggop}
+
+    Đề tài xây dựng một hệ thống xác thực hành vi hoàn chỉnh từ đầu đến cuối, bao gồm thu thập dữ liệu, huấn luyện mô hình và triển khai thực tế trên thiết bị Android. Cụ thể, đề tài có những đóng góp chính sau đây.
+
+    Thứ nhất, xây dựng ứng dụng Android thu thập dữ liệu hành vi phục vụ toàn bộ giai đoạn tạo bộ dữ liệu nghiên cứu. Ứng dụng sử dụng \textit{Foreground Service} kết hợp cơ chế kích hoạt theo sự kiện để ghi nhận dữ liệu cảm biến quán tính trong nền, đồng thời cung cấp biểu mẫu chuẩn hóa để thu thập hành vi touch và keystroke theo ba dạng tác vụ kiểm soát được. Từ đó xây dựng được bộ dữ liệu gồm 25 người tham gia với đầy đủ ba loại hoạt động: đi bộ, đứng và ngồi.
+
+    Thứ hai, xây dựng pipeline huấn luyện mô hình đa phương thức kết hợp hai thành phần độc lập. Với dữ liệu IMU, đề tài huấn luyện và so sánh ba biến thể kiến trúc backbone là CNN 1D, ConvLSTM và \textit{Bidirectional ConvLSTM} để chọn ra kiến trúc tốt nhất trích xuất vector nhúng 128 chiều. Với dữ liệu touch, bộ phân loại Random Forest được huấn luyện trên vector đặc trưng 48 chiều gồm \textit{tap}, \textit{scroll} và \textit{keystroke dynamics}. Điểm xác thực từ hai nguồn được tổng hợp qua cơ chế EMA, tạo thành hệ thống fusion đa phương thức hoạt động ổn định qua nhiều phiên liên tiếp.
+
+    Thứ ba, triển khai toàn bộ hệ thống suy luận trực tiếp trên thiết bị Android thông qua TensorFlow Lite mà không cần kết nối máy chủ. Điều này đảm bảo quyền riêng tư của người dùng và khả năng hoạt động ngoại tuyến hoàn toàn --- một điểm khác biệt so với các hệ thống phụ thuộc vào \textit{cloud inference} trong các công trình tham chiếu.
+
+    Thứ tư, đề xuất cơ chế xác thực dự phòng bằng cử chỉ lắc điện thoại cá nhân hóa khi phát hiện người dùng lạ. Đây là đóng góp chưa xuất hiện trong các công trình được khảo sát: thay vì chỉ khóa màn hình khi phát hiện bất thường như MultiLock, hệ thống yêu cầu người dùng thực hiện lại mẫu cử chỉ lắc đã đăng ký, từ đó đóng kín vòng lặp xác thực từ phát hiện bất thường đến khôi phục phiên sử dụng an toàn theo đúng triết lý của \textit{behavioral biometrics}.
+
+    \section{Bố cục đồ án}
+    \label{sec:bocuc}
+
+    Phần còn lại của báo cáo được tổ chức thành sáu chương như sau.
+
+    Chương 2 trình bày các kiến thức nền tảng cần thiết cho đề tài, bao gồm nguyên lý hoạt động của sinh trắc học hành vi, đặc điểm của dữ liệu cảm biến quán tính và hành vi touch trên Android, các mô hình học máy được sử dụng trong hệ thống, cũng như tổng quan các công trình liên quan và khoảng trống nghiên cứu mà đề tài hướng tới giải quyết.
+
+    Chương 3 mô tả quá trình thu thập dữ liệu, bao gồm thiết kế ứng dụng Android thu thập, giao thức thu thập dữ liệu với 25 người tham gia, cùng toàn bộ pipeline tiền xử lý từ dữ liệu thô đến các tensor đầu vào sẵn sàng cho huấn luyện.
+
+    Chương 4 trình bày quá trình xây dựng mô hình, gồm huấn luyện và so sánh các biến thể kiến trúc backbone cho dữ liệu IMU, huấn luyện bộ phân loại Random Forest cho dữ liệu touch, thiết kế cơ chế fusion đa phương thức và xuất mô hình sang định dạng TFLite để triển khai trên thiết bị.
+
+    Chương 5 mô tả quá trình tích hợp và triển khai trên Android, bao gồm kiến trúc ứng dụng xác thực, cơ chế suy luận on-device thông qua TFLite, luồng đăng ký người dùng, dịch vụ xác thực liên tục trong nền và cơ chế xác thực dự phòng bằng cử chỉ lắc.
+
+    Chương 6 trình bày thiết kế thực nghiệm, kết quả đánh giá hệ thống theo các chỉ số FAR, FRR và EER, phân tích đóng góp của từng phương thức, đánh giá khả năng tổng quát hóa với người dùng mới và hiệu năng thực tế trên thiết bị.
+
+    Chương 7 tổng kết lại các kết quả đạt được, chỉ ra những hạn chế còn tồn tại và đề xuất các hướng phát triển tiếp theo của hệ thống.
+\end{document}

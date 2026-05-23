@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BioAuth Authenticator</string>
+
+    <!-- Fallback -->
+    <string name="fallback_title">Người dùng lạ — xác thực bằng cử chỉ lắc</string>
+    <string name="fallback_title_with_remaining">Còn %1$d giây — lắc đúng số lần đã đăng ký</string>
+    <string name="fallback_status">Bấm \"Bắt đầu xác thực\" rồi lắc điện thoại đúng số lần bí mật của bạn.</string>
+    <string name="fallback_counter">%1$d</string>
+    <string name="fallback_not_enrolled">Bạn chưa đăng ký mẫu lắc. Vui lòng vào màn hình chính → Đăng ký.</string>
+    <string name="fallback_max_failed">Đã sai quá nhiều lần — chuyển sang xác thực hệ thống.</string>
+    <string name="fallback_shake_now">Lắc đi! Hệ thống đang đếm…</string>
+    <string name="fallback_pass">Xác thực thành công (đã đếm %1$d lần lắc).</string>
+    <string name="fallback_fail_timeout">Hết thời gian: đếm được %1$d. Sai lần %2$d.</string>
+    <string name="fallback_fail_count">Đếm được %1$d (không khớp). Sai lần %2$d.</string>
+    <string name="btn_start_shake">Bắt đầu xác thực</string>
+    <string name="btn_done_shake">Xong</string>
+    <string name="btn_cancel">Hủy</string>
+
+    <!-- Owner biometric enrollment (TFLite backbone) -->
+    <string name="enroll_owner_title">Đăng ký sinh trắc học</string>
+    <string name="enroll_owner_hint">Cầm điện thoại như bình thường. App sẽ thu 6 mẫu hành vi (mỗi mẫu 2 giây). Tổng thời gian ≈ 15 giây.</string>
+    <string name="enroll_owner_ready">Sẵn sàng. Bấm \"Bắt đầu\" và cầm điện thoại tự nhiên.</string>
+    <string name="enroll_owner_starting">Khởi động cảm biến…</string>
+    <string name="enroll_owner_capturing">Đang thu mẫu %1$d / %2$d…</string>
+    <string name="enroll_owner_done">Đã đăng ký thành công %1$d mẫu</string>
+    <string name="enroll_owner_failed_sensor">Không đọc được cảm biến. Hãy thử lại.</string>
+    <string name="enroll_owner_error">Lỗi: %1$s</string>
+    <string name="enroll_owner_cleared">Đã xoá hồ sơ</string>
+    <string name="enroll_owner_summary_empty">Chưa đăng ký. Bấm \"Bắt đầu\" để đăng ký.</string>
+    <string name="enroll_owner_summary_enrolled">Đã đăng ký: %1$d mẫu sinh trắc học</string>
+    <string name="enroll_owner_start_btn">Bắt đầu đăng ký</string>
+    <string name="enroll_owner_clear_btn">Xoá hồ sơ</string>
+    <string name="enroll_owner_done_btn">Xong</string>
+
+    <!-- Quiz screen -->
+    <string name="quiz_title">Bài kiểm tra kiến thức</string>
+    <string name="quiz_btn_confirm">Xác nhận</string>
+    <string name="quiz_btn_next">Câu tiếp theo</string>
+    <string name="quiz_pick_answer">Hãy chọn một đáp án!</string>
+    <string name="quiz_correct">Đúng! %1$s</string>
+    <string name="quiz_wrong">Sai. Đáp án đúng: %1$s</string>
+</resources>

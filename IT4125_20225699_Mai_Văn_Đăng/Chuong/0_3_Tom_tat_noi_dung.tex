@@ -1,0 +1,56 @@
+\documentclass[../DoAn.tex]{subfiles}
+\begin{document}
+    \begin{center}
+        \Large{\textbf{TÓM TẮT NỘI DUNG BÁO CÁO}}\\
+    \end{center}
+    \vspace{1cm}
+
+    Đồ án tốt nghiệp này nghiên cứu và xây dựng một hệ thống xác thực sinh trắc học hành vi đa modal trên nền tảng Android, kết hợp dữ liệu cảm biến chuyển động (accelerometer, gyroscope, magnetometer) với dữ liệu tương tác màn hình (tap, scroll, keystroke) trong một kiến trúc xác thực liên tục trong 3 ngữ cảnh hoạt động là đi bộ, đứng và ngồi. 
+    
+    Đóng góp chính của đề tài bao gồm: (1) kiến trúc đa modal kết hợp inertial + touch trong một pipeline có tầng ngữ cảnh hoạt động; (2) cơ chế nhận diện người lạ qua ngưỡng confidence trên đầu ra phân loại nhị phân 1-vs-all; (3) cơ chế xác thực dự phòng mới bằng cử chỉ lắc điện thoại theo pattern cá nhân; và (4) đánh giá thực nghiệm so sánh có hệ thống với baseline và các công trình tham khảo.
+    
+    Hệ thống được triển khai bao gồm 2 ứng dụng Android: BioAuth Data Collection (thu thập dữ liệu) và BioAuth Authenticator (suy luận thời gian thực), cùng với pipeline tiền xử lý và huấn luyện trên Python. Dataset thu thập từ 15 người tham gia bao gồm 95.380 cửa sổ inertial và đầy đủ dữ liệu touch/keystroke.
+    
+    Kết quả thực nghiệm trên test set độc lập cho thấy hệ thống đạt … [TBD: AUC, EER, FAR, FRR sau khi chạy thực nghiệm], cải thiện đáng kể so với baseline đơn modal. Cơ chế gesture fallback hoạt động chính xác với độ trễ trung bình … ms, đảm bảo trải nghiệm người dùng mượt mà trong tình huống thực tế.
+
+\begin{table}[H]
+    \centering
+    \caption{Danh mục từ viết tắt}
+    \begin{tabular}{|l|p{11cm}|}
+    \hline
+    \textbf{Viết tắt} & \textbf{Diễn giải} \\ \hline
+    
+    AUC & Area Under (ROC) Curve \\ \hline
+    ADL & Activities of Daily Living --- Hoạt động hàng ngày \\ \hline
+    BCE & Binary Cross Entropy --- Hàm mất mát phân loại nhị phân \\ \hline
+    CNN & Convolutional Neural Network --- Mạng nơ-ron tích chập \\ \hline
+    EER & Equal Error Rate --- Tỷ lệ lỗi tại điểm cân bằng FAR và FRR \\ \hline
+    FAR & False Acceptance Rate --- Tỷ lệ chấp nhận sai \\ \hline
+    FFT & Fast Fourier Transform --- Biến đổi Fourier nhanh \\ \hline
+    FRR & False Rejection Rate --- Tỷ lệ từ chối sai \\ \hline
+    GAP & Global Average Pooling \\ \hline
+    IKT & Inter-Key Time --- Khoảng thời gian giữa hai phím liên tiếp \\ \hline
+    IMU & Inertial Measurement Unit --- Khối cảm biến quán tính \\ \hline
+    MLP & Multi-Layer Perceptron \\ \hline
+    PIN & Personal Identification Number \\ \hline
+    QCD & Quickest Change Detection \\ \hline
+    ROC & Receiver Operating Characteristic \\ \hline
+    SDK & Software Development Kit \\ \hline
+    SMA & Signal Magnitude Area \\ \hline
+    SVM & Support Vector Machine --- Máy vectơ hỗ trợ \\ \hline
+    TFLite & TensorFlow Lite \\ \hline
+    UI & User Interface --- Giao diện người dùng \\ \hline
+    UX & User Experience --- Trải nghiệm người dùng \\ \hline
+    
+    \end{tabular}
+\end{table}
+
+    \vspace{0.5cm}
+
+    \begin{flushright}
+        Sinh viên thực hiện\\
+        \begin{tabular}{@{}c@{}}
+            \textit{(Ký và ghi rõ họ tên)}
+        \end{tabular}
+    \end{flushright}
+\end{document}

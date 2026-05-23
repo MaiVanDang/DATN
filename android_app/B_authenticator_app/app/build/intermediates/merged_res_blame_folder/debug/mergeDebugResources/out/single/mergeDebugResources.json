@@ -1,0 +1,58 @@
+[
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-debug-36:\\drawable_ic_launcher_background.xml.flat",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\drawable\\ic_launcher_background.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-debug-36:\\layout_activity_fallback.xml.flat",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\layout\\activity_fallback.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-debug-36:\\layout_activity_quiz.xml.flat",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\layout\\activity_quiz.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-debug-36:\\layout_activity_settings.xml.flat",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\layout\\activity_settings.xml"
+    },
+    {
+        "merged": "com.datn.authenticator.app-debug-36:/layout_activity_fallback_enroll.xml.flat",
+        "source": "com.datn.authenticator.app-main-38:/layout/activity_fallback_enroll.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-debug-36:\\xml_data_extraction_rules.xml.flat",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\xml\\data_extraction_rules.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-debug-36:\\layout_activity_main.xml.flat",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\layout\\activity_main.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-debug-36:\\mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\mipmap-anydpi-v26\\ic_launcher_round.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-debug-36:\\layout_activity_owner_enrollment.xml.flat",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\layout\\activity_owner_enrollment.xml"
+    },
+    {
+        "merged": "com.datn.authenticator.app-debug-36:/layout_activity_quiz.xml.flat",
+        "source": "com.datn.authenticator.app-main-38:/layout/activity_quiz.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-debug-36:\\drawable_ic_launcher_foreground.xml.flat",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\drawable\\ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-debug-36:\\layout_activity_benchmark.xml.flat",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\layout\\activity_benchmark.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-debug-36:\\layout_activity_enrollment.xml.flat",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\layout\\activity_enrollment.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-debug-36:\\mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\mipmap-anydpi-v26\\ic_launcher.xml"
+    }
+]

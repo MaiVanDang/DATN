@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      Permissions per Bảng 5.1 (BioAuth Authenticator column):
+        - BODY_SENSORS         : accelerometer, gyroscope, magnetometer
+        - FOREGROUND_SERVICE   : run AuthenticationService while user is away
+        - FOREGROUND_SERVICE_DATA_SYNC : Android 14+ subtype
+        - POST_NOTIFICATIONS   : show ongoing TRUSTED/WARNING notification
+        - SYSTEM_ALERT_WINDOW  : overlay FallbackUI on top of other apps
+        - HIGH_SAMPLING_RATE_SENSORS (Android 12+) : ensure 50 Hz available
+    -->
+    <uses-permission android:name="android.permission.BODY_SENSORS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Hardware requirements -->
+    <uses-feature
+        android:name="android.hardware.sensor.accelerometer"
+        android:required="true" />
+    <uses-feature
+        android:name="android.hardware.sensor.gyroscope"
+        android:required="true" />
+    <uses-feature
+        android:name="android.hardware.sensor.compass"
+        android:required="false" />
+
+    <application
+        android:name=".AuthenticatorApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.BioAuthAuthenticator"
+        tools:targetApi="34">
+
+        <!-- Owner biometric enrollment — app entry point; skips to QuizActivity if already enrolled -->
+        <activity
+            android:name=".ui.OwnerEnrollmentActivity"
+            android:exported="true"
+            android:label="@string/enroll_owner_title">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Shake-pattern enrollment — runs between biometric enrollment and quiz -->
+        <activity
+            android:name=".ui.FallbackEnrollActivity"
+            android:exported="false"
+            android:label="Đăng ký mẫu lắc" />
+
+        <!-- Quiz screen — shown after enrollment; auth service runs throughout -->
+        <activity
+            android:name=".ui.QuizActivity"
+            android:exported="false"
+            android:label="@string/quiz_title" />
+
+        <!-- Fallback UI: overlay shown when state = UNKNOWN.
+             Theme makes it transparent + on top per Mục 5.3.1. -->
+        <activity
+            android:name=".fallback.FallbackActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:showOnLockScreen="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Fallback" />
+
+        <!-- Foreground service (Mục 5.3.1, AuthenticationService) -->
+        <service
+            android:name=".service.AuthenticationService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Boot receiver — auto-start service after reboot (optional) -->
+        <receiver
+            android:name=".util.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

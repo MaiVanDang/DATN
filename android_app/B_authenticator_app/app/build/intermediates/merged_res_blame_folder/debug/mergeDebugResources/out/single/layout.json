@@ -1,0 +1,38 @@
+[
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-mergeDebugResources-35:\\layout\\activity_enrollment.xml",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\layout\\activity_enrollment.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-mergeDebugResources-35:\\layout\\activity_settings.xml",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\layout\\activity_settings.xml"
+    },
+    {
+        "merged": "com.datn.authenticator.app-mergeDebugResources-35:/layout/activity_quiz.xml",
+        "source": "com.datn.authenticator.app-main-38:/layout/activity_quiz.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-mergeDebugResources-35:\\layout\\activity_quiz.xml",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\layout\\activity_quiz.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-mergeDebugResources-35:\\layout\\activity_owner_enrollment.xml",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\layout\\activity_owner_enrollment.xml"
+    },
+    {
+        "merged": "com.datn.authenticator.app-mergeDebugResources-35:/layout/activity_fallback_enroll.xml",
+        "source": "com.datn.authenticator.app-main-38:/layout/activity_fallback_enroll.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-mergeDebugResources-35:\\layout\\activity_benchmark.xml",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\layout\\activity_benchmark.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-mergeDebugResources-35:\\layout\\activity_fallback.xml",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\layout\\activity_fallback.xml"
+    },
+    {
+        "merged": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-mergeDebugResources-35:\\layout\\activity_main.xml",
+        "source": "C:\\Users\\Admin\\.gradle\\daemon\\8.7\\com.datn.authenticator.app-main-38:\\layout\\activity_main.xml"
+    }
+]

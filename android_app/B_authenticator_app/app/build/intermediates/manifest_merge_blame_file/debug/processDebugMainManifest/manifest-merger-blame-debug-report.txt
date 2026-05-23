@@ -1,0 +1,261 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.datn.authenticator"
+4    android:versionCode="1"
+5    android:versionName="1.0.0-demo" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="29"
+9        android:targetSdkVersion="36" />
+10
+11    <!--
+12      Permissions per Bảng 5.1 (BioAuth Authenticator column):
+13        - BODY_SENSORS         : accelerometer, gyroscope, magnetometer
+14        - FOREGROUND_SERVICE   : run AuthenticationService while user is away
+15        - FOREGROUND_SERVICE_DATA_SYNC : Android 14+ subtype
+16        - POST_NOTIFICATIONS   : show ongoing TRUSTED/WARNING notification
+17        - SYSTEM_ALERT_WINDOW  : overlay FallbackUI on top of other apps
+18        - HIGH_SAMPLING_RATE_SENSORS (Android 12+) : ensure 50 Hz available
+19    -->
+20    <uses-permission android:name="android.permission.BODY_SENSORS" />
+20-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:14:5-71
+20-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:14:22-68
+21    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+21-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:15:5-77
+21-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:15:22-74
+22    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+22-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:16:5-87
+22-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:16:22-84
+23    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+23-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:17:5-77
+23-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:17:22-74
+24    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+24-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:18:5-78
+24-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:18:22-75
+25    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
+25-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:19:5-85
+25-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:19:22-82
+26    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+26-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:20:5-81
+26-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:20:22-78
+27    <uses-permission android:name="android.permission.WAKE_LOCK" />
+27-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:21:5-68
+27-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:21:22-65
+28
+29    <!-- Hardware requirements -->
+30    <uses-feature
+30-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:24:5-26:35
+31        android:name="android.hardware.sensor.accelerometer"
+31-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:25:9-61
+32        android:required="true" />
+32-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:26:9-32
+33    <uses-feature
+33-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:27:5-29:35
+34        android:name="android.hardware.sensor.gyroscope"
+34-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:28:9-57
+35        android:required="true" />
+35-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:29:9-32
+36    <uses-feature
+36-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:30:5-32:36
+37        android:name="android.hardware.sensor.compass"
+37-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:31:9-55
+38        android:required="false" />
+38-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:32:9-33
+39
+40    <permission
+40-->[androidx.core:core:1.13.1] C:\Users\Admin\.gradle\caches\transforms-4\8e0a0bff2d388b6446750efdf4a5758f\transformed\core-1.13.1\AndroidManifest.xml:22:5-24:47
+41        android:name="com.datn.authenticator.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+41-->[androidx.core:core:1.13.1] C:\Users\Admin\.gradle\caches\transforms-4\8e0a0bff2d388b6446750efdf4a5758f\transformed\core-1.13.1\AndroidManifest.xml:23:9-81
+42        android:protectionLevel="signature" />
+42-->[androidx.core:core:1.13.1] C:\Users\Admin\.gradle\caches\transforms-4\8e0a0bff2d388b6446750efdf4a5758f\transformed\core-1.13.1\AndroidManifest.xml:24:9-44
+43
+44    <uses-permission android:name="com.datn.authenticator.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+44-->[androidx.core:core:1.13.1] C:\Users\Admin\.gradle\caches\transforms-4\8e0a0bff2d388b6446750efdf4a5758f\transformed\core-1.13.1\AndroidManifest.xml:26:5-97
+44-->[androidx.core:core:1.13.1] C:\Users\Admin\.gradle\caches\transforms-4\8e0a0bff2d388b6446750efdf4a5758f\transformed\core-1.13.1\AndroidManifest.xml:26:22-94
+45
+46    <application
+46-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:34:5-96:19
+47        android:name="com.datn.authenticator.AuthenticatorApp"
+47-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:35:9-41
+48        android:allowBackup="false"
+48-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:36:9-36
+49        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+49-->[androidx.core:core:1.13.1] C:\Users\Admin\.gradle\caches\transforms-4\8e0a0bff2d388b6446750efdf4a5758f\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
+50        android:dataExtractionRules="@xml/data_extraction_rules"
+50-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:37:9-65
+51        android:debuggable="true"
+52        android:extractNativeLibs="false"
+53        android:fullBackupContent="false"
+53-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:38:9-42
+54        android:icon="@mipmap/ic_launcher"
+54-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:39:9-43
+55        android:label="@string/app_name"
+55-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:40:9-41
+56        android:roundIcon="@mipmap/ic_launcher"
+56-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:41:9-48
+57        android:supportsRtl="true"
+57-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:42:9-35
+58        android:testOnly="true"
+59        android:theme="@style/Theme.BioAuthAuthenticator" >
+59-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:43:9-58
+60
+61        <!-- Owner biometric enrollment — app entry point; skips to QuizActivity if already enrolled -->
+62        <activity
+62-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:47:9-55:20
+63            android:name="com.datn.authenticator.ui.OwnerEnrollmentActivity"
+63-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:48:13-55
+64            android:exported="true"
+64-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:49:13-36
+65            android:label="@string/enroll_owner_title" >
+65-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:50:13-55
+66            <intent-filter>
+66-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:51:13-54:29
+67                <action android:name="android.intent.action.MAIN" />
+67-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:52:17-69
+67-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:52:25-66
+68
+69                <category android:name="android.intent.category.LAUNCHER" />
+69-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:53:17-77
+69-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:53:27-74
+70            </intent-filter>
+71        </activity>
+72
+73        <!-- Shake-pattern enrollment — runs between biometric enrollment and quiz -->
+74        <activity
+74-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:58:9-61:47
+75            android:name="com.datn.authenticator.ui.FallbackEnrollActivity"
+75-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:59:13-54
+76            android:exported="false"
+76-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:60:13-37
+77            android:label="Đăng ký mẫu lắc" />
+77-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:61:13-44
+78
+79        <!-- Quiz screen — shown after enrollment; auth service runs throughout -->
+80        <activity
+80-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:64:9-67:50
+81            android:name="com.datn.authenticator.ui.QuizActivity"
+81-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:65:13-44
+82            android:exported="false"
+82-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:66:13-37
+83            android:label="@string/quiz_title" />
+83-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:67:13-47
+84
+85        <!--
+86             Fallback UI: overlay shown when state = UNKNOWN.
+87             Theme makes it transparent + on top per Mục 5.3.1.
+88        -->
+89        <activity
+89-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:71:9-78:53
+90            android:name="com.datn.authenticator.fallback.FallbackActivity"
+90-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:72:13-54
+91            android:excludeFromRecents="true"
+91-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:74:13-46
+92            android:exported="false"
+92-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:73:13-37
+93            android:launchMode="singleInstance"
+93-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:75:13-48
+94            android:showOnLockScreen="true"
+94-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:76:13-44
+95            android:taskAffinity=""
+95-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:77:13-36
+96            android:theme="@style/Theme.Fallback" />
+96-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:78:13-50
+97
+98        <!-- Foreground service (Mục 5.3.1, AuthenticationService) -->
+99        <service
+99-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:81:9-84:56
+100            android:name="com.datn.authenticator.service.AuthenticationService"
+100-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:82:13-58
+101            android:exported="false"
+101-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:83:13-37
+102            android:foregroundServiceType="dataSync" />
+102-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:84:13-53
+103
+104        <!-- Boot receiver — auto-start service after reboot (optional) -->
+105        <receiver
+105-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:87:9-95:20
+106            android:name="com.datn.authenticator.util.BootReceiver"
+106-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:88:13-46
+107            android:enabled="true"
+107-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:89:13-35
+108            android:exported="true" >
+108-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:90:13-36
+109            <intent-filter>
+109-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:91:13-94:29
+110                <action android:name="android.intent.action.BOOT_COMPLETED" />
+110-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:92:17-79
+110-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:92:25-76
+111                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+111-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:93:17-82
+111-->F:\DATN\B_authenticator_app_TFLite\B_authenticator_app\app\src\main\AndroidManifest.xml:93:25-79
+112            </intent-filter>
+113        </receiver>
+114
+115        <provider
+115-->[androidx.emoji2:emoji2:1.3.0] C:\Users\Admin\.gradle\caches\transforms-4\192474c036ec43764acdf6f3e34ae042\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
+116            android:name="androidx.startup.InitializationProvider"
+116-->[androidx.emoji2:emoji2:1.3.0] C:\Users\Admin\.gradle\caches\transforms-4\192474c036ec43764acdf6f3e34ae042\transformed\emoji2-1.3.0\AndroidManifest.xml:25:13-67
+117            android:authorities="com.datn.authenticator.androidx-startup"
+117-->[androidx.emoji2:emoji2:1.3.0] C:\Users\Admin\.gradle\caches\transforms-4\192474c036ec43764acdf6f3e34ae042\transformed\emoji2-1.3.0\AndroidManifest.xml:26:13-68
+118            android:exported="false" >
+118-->[androidx.emoji2:emoji2:1.3.0] C:\Users\Admin\.gradle\caches\transforms-4\192474c036ec43764acdf6f3e34ae042\transformed\emoji2-1.3.0\AndroidManifest.xml:27:13-37
+119            <meta-data
+119-->[androidx.emoji2:emoji2:1.3.0] C:\Users\Admin\.gradle\caches\transforms-4\192474c036ec43764acdf6f3e34ae042\transformed\emoji2-1.3.0\AndroidManifest.xml:29:13-31:52
+120                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+120-->[androidx.emoji2:emoji2:1.3.0] C:\Users\Admin\.gradle\caches\transforms-4\192474c036ec43764acdf6f3e34ae042\transformed\emoji2-1.3.0\AndroidManifest.xml:30:17-75
+121                android:value="androidx.startup" />
+121-->[androidx.emoji2:emoji2:1.3.0] C:\Users\Admin\.gradle\caches\transforms-4\192474c036ec43764acdf6f3e34ae042\transformed\emoji2-1.3.0\AndroidManifest.xml:31:17-49
+122            <meta-data
+122-->[androidx.lifecycle:lifecycle-process:2.8.4] C:\Users\Admin\.gradle\caches\transforms-4\5b8ea465910fd80be9fa1407ed6ac524\transformed\lifecycle-process-2.8.4\AndroidManifest.xml:29:13-31:52
+123                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+123-->[androidx.lifecycle:lifecycle-process:2.8.4] C:\Users\Admin\.gradle\caches\transforms-4\5b8ea465910fd80be9fa1407ed6ac524\transformed\lifecycle-process-2.8.4\AndroidManifest.xml:30:17-78
+124                android:value="androidx.startup" />
+124-->[androidx.lifecycle:lifecycle-process:2.8.4] C:\Users\Admin\.gradle\caches\transforms-4\5b8ea465910fd80be9fa1407ed6ac524\transformed\lifecycle-process-2.8.4\AndroidManifest.xml:31:17-49
+125            <meta-data
+125-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:29:13-31:52
+126                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+126-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:30:17-85
+127                android:value="androidx.startup" />
+127-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:31:17-49
+128        </provider>
+129
+130        <receiver
+130-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:34:9-52:20
+131            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+131-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:35:13-76
+132            android:directBootAware="false"
+132-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:36:13-44
+133            android:enabled="true"
+133-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:37:13-35
+134            android:exported="true"
+134-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:38:13-36
+135            android:permission="android.permission.DUMP" >
+135-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:39:13-57
+136            <intent-filter>
+136-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:40:13-42:29
+137                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+137-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:41:17-91
+137-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:41:25-88
+138            </intent-filter>
+139            <intent-filter>
+139-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:43:13-45:29
+140                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+140-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:44:17-85
+140-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:44:25-82
+141            </intent-filter>
+142            <intent-filter>
+142-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:46:13-48:29
+143                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+143-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:47:17-88
+143-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:47:25-85
+144            </intent-filter>
+145            <intent-filter>
+145-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:49:13-51:29
+146                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+146-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:50:17-95
+146-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\Admin\.gradle\caches\transforms-4\4e16cc280eaa0a1f5277c41379c36ea2\transformed\profileinstaller-1.3.1\AndroidManifest.xml:50:25-92
+147            </intent-filter>
+148        </receiver>
+149    </application>
+150
+151</manifest>
