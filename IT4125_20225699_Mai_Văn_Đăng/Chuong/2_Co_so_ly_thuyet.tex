@@ -1,0 +1,385 @@
+\documentclass[../DoAn.tex]{subfiles}
+\begin{document}
+    \section{Sinh trắc học hành vi (Behavioral Biometrics)}
+
+    \subsection{Khái niệm và phân loại}
+
+    Sinh trắc học hành vi (\textit{behavioral biometrics}) là lĩnh vực nghiên cứu nhận diện hoặc xác thực danh tính cá nhân dựa trên các đặc trưng hành vi --- tức cách một người tương tác với thiết bị hoặc thực hiện các hoạt động thể chất --- thay vì dựa trên các đặc trưng sinh lý cố định như vân tay hay khuôn mặt.
+    
+    Điểm khác biệt căn bản của sinh trắc học hành vi là các đặc trưng mang tính động, có thể thay đổi theo thời gian và ngữ cảnh sử dụng, nhưng vẫn duy trì một mẫu hành vi đủ ổn định để phân biệt giữa các cá nhân.
+    
+    Trong bối cảnh thiết bị di động, \textit{behavioral biometrics} thường được phân loại theo nguồn dữ liệu:
+    \begin{itemize}
+        \item Hành vi vận động: \textit{gait recognition}, cách cầm điện thoại.
+        
+        \item Hành vi tương tác màn hình: \textit{touch dynamics}, \textit{scroll dynamics}.
+        
+        \item Hành vi gõ phím: \textit{keystroke dynamics}.
+    \end{itemize}
+    
+    Đề tài này khai thác đồng thời cả ba nhóm dữ liệu trên nhằm tận dụng tính bổ sung lẫn nhau giữa các nguồn tín hiệu, từ đó xây dựng hệ thống xác thực đa phương thức toàn diện.
+    
+    \subsection{Ưu điểm và hạn chế}
+    
+    So với các phương pháp xác thực truyền thống, sinh trắc học hành vi có ưu điểm nổi bật là tính liên tục và tính trong suốt: hệ thống có thể xác thực người dùng liên tục mà không yêu cầu thao tác chủ động từ phía người dùng.
+    
+    Ngoài ra, phương pháp này không đòi hỏi phần cứng chuyên dụng mà chỉ sử dụng các cảm biến cơ bản vốn đã được tích hợp sẵn trên hầu hết điện thoại thông minh hiện đại, qua đó giúp giảm đáng kể chi phí triển khai hệ thống.
+    
+    Tuy nhiên, một số hạn chế vẫn cần được xem xét. Hành vi người dùng có thể biến thiên theo thời gian do mệt mỏi, thay đổi thói quen hoặc khác biệt về môi trường sử dụng, dẫn đến nhu cầu cập nhật mô hình định kỳ.
+    
+    Bên cạnh đó, các hệ thống chỉ dựa trên cảm biến chuyển động tồn tại điểm yếu trong các tình huống thiết bị đứng yên, chẳng hạn khi người dùng nằm lướt web hoặc khi kẻ tấn công đặt cố định thiết bị để thực hiện truy cập trái phép. Đây cũng là lý do cốt lõi dẫn đến việc thiết kế hệ thống xác thực đa phương thức trong đề tài này.
+
+    \section{Dữ liệu cảm biến trên thiết bị Andoird}
+
+    \subsection{Cảm biến chuyển động}
+
+    Thiết bị Android hiện đại tích hợp ba cảm biến quán tính chính phục vụ cho bài toán nhận diện hành vi.
+    
+    \begin{itemize}
+        \item Gia tốc kế (accelerometer): đo gia tốc tuyến tính theo ba trục tọa độ $(x, y, z)$ với đơn vị $m/s^2$, phản ánh chuyển động tịnh tiến và rung lắc của thiết bị.
+        
+        \item Con quay hồi chuyển (gyroscope): đo vận tốc góc theo ba trục, cung cấp thông tin về chuyển động xoay và độ nghiêng của thiết bị.
+        
+        \item Cảm biến từ trường (magnetometer): đo cường độ từ trường xung quanh, hỗ trợ xác định hướng tuyệt đối của thiết bị trong không gian.
+    \end{itemize}
+    
+    Sự kết hợp của ba cảm biến trên tạo thành bộ dữ liệu chuyển động gồm 9 trục tín hiệu, là nền tảng cho các mô hình nhận diện hoạt động và xác thực người dùng.
+    
+    \subsection{Dữ liệu tương tác màn hình}
+
+    Khi người dùng chạm vào màn hình, Android ghi nhận một chuỗi sự kiện liên tục bao gồm ACTION\_DOWN (chạm xuống), ACTION\_MOVE (di chuyển, có thể được kích hoạt khoảng 60--120 lần mỗi giây) và ACTION\_UP (nhấc tay khỏi màn hình). Mỗi sự kiện chứa các thông tin như tọa độ $(x, y)$, áp lực tiếp xúc (pressure), diện tích tiếp xúc (size) và dấu thời gian (timestamp) với độ chính xác đến mili giây.
+    
+    Từ một chuỗi sự kiện hoàn chỉnh --- gọi là một \textit{stroke} --- có thể trích xuất nhiều đặc trưng hành vi như thời gian chạm, tốc độ vuốt trung bình, độ dài và độ thẳng của quỹ đạo, áp lực trung bình, áp lực cực đại, góc vuốt và gia tốc chuyển động.
+    
+    Trong đề tài này, dữ liệu touch được thu thập thông qua một ứng dụng biểu mẫu có kiểm soát, bao gồm ba loại tác vụ chuẩn hóa: câu hỏi trắc nghiệm (thu thập \textit{tap dynamics}), câu hỏi nhập văn bản (thu thập \textit{keystroke dynamics}) và danh sách cuộn dài (thu thập \textit{scroll dynamics}). Cách tiếp cận này giúp đảm bảo tính nhất quán của dữ liệu giữa các người tham gia, đồng thời tránh các vấn đề liên quan đến quyền truy cập hệ thống trên Android 10+.
+
+    \subsection{Thu thập dữ liệu thực tế}
+
+    Android cung cấp \textit{SensorManager API} cho phép đăng ký lắng nghe các sự kiện cảm biến với tần số lấy mẫu tùy chỉnh. Trong đề tài này, tần số lấy mẫu được lựa chọn là 50~Hz nhằm cân bằng giữa độ phân giải tín hiệu và mức tiêu thụ năng lượng.
+    
+    Để thu thập dữ liệu cảm biến chuyển động trong nền, hệ thống sử dụng \textit{Foreground Service} kết hợp với cơ chế \textit{event-triggered}. Cụ thể, hệ thống chỉ bắt đầu một phiên thu thập dữ liệu khi phát hiện màn hình được bật hoặc xuất hiện chuyển động đáng kể thông qua cảm biến \textit{Significant Motion}. Ngoài ra, cơ chế \textit{cooldown} 5 giây giữa hai phiên liên tiếp được áp dụng nhằm tránh việc kích hoạt thu thập dữ liệu quá thường xuyên.
+    
+    Dung lượng dữ liệu tích lũy được ước tính khoảng 600 KB mỗi ngày cho mỗi người dùng, phù hợp với mục đích nghiên cứu và không gây ảnh hưởng đáng kể đến tài nguyên thiết bị.
+
+    \section{Các mô hình học máy trong đề tài}
+
+    \subsection{Mạng CNN 1D cho dữ liệu chuỗi thời gian}
+    
+    Mạng tích chập một chiều (\textit{1D Convolutional Neural Network -- 1D CNN}) được lựa chọn làm mô hình chính nhờ khả năng học đặc trưng cục bộ trực tiếp từ tín hiệu thô mà không cần thực hiện bước trích xuất đặc trưng thủ công. Các bộ lọc tích chập trượt theo chiều thời gian, cho phép phát hiện các mẫu cục bộ đặc trưng như đỉnh gia tốc, nhịp bước chân hoặc kiểu cầm thiết bị.
+    
+    Đầu vào của mô hình là tensor có kích thước $[\text{số mẫu} \times \text{số kênh}]$ (ví dụ: $100 \times 9$, tương ứng với 2 giây dữ liệu từ 9 trục cảm biến), cho phép mô hình học đồng thời mối quan hệ theo thời gian và mối tương quan giữa các kênh cảm biến.
+    
+    \subsection{SVM với đặc trưng thủ công}
+    
+    \textit{Support Vector Machine} (SVM) là mô hình phân loại truyền thống dựa trên việc tìm siêu phẳng tối ưu nhằm phân tách các lớp dữ liệu. Với dữ liệu cảm biến, SVM yêu cầu bước trích xuất đặc trưng thủ công trước khi huấn luyện mô hình.
+    
+    Từ mỗi cửa sổ tín hiệu, hệ thống tính toán các đặc trưng thống kê và tần số như giá trị trung bình, độ lệch chuẩn, năng lượng tín hiệu, tỷ lệ \textit{zero-crossing} và thành phần tần số chủ đạo thông qua biến đổi FFT.
+    
+    SVM thường hoạt động hiệu quả hơn CNN trong trường hợp tập dữ liệu có kích thước nhỏ do số lượng tham số cần học ít hơn. Đây cũng là lý do quan trọng để tiến hành so sánh thực nghiệm giữa hai mô hình trong đề tài.
+    
+    \subsection{Score-level fusion đa modal}
+    
+    Kết hợp ở mức điểm số (\textit{score-level fusion}) là phương pháp tổ hợp kết quả từ nhiều nguồn dữ liệu thông qua việc kết hợp các điểm tin cậy đầu ra của từng mô hình.
+    
+    Trong hệ thống đề xuất, quá trình fusion được thực hiện giữa hai nguồn dữ liệu chính:
+    \begin{itemize}
+        \item Điểm xác thực từ mô hình inertial (CNN 1D hoặc SVM), phản ánh đặc trưng chuyển động cơ thể trên từng cửa sổ dữ liệu dài 2 giây.
+        
+        \item Điểm xác thực touch, được tính bằng độ tương đồng cosine (\textit{cosine similarity}) giữa vector đặc trưng hành vi touch của người cần xác thực và hồ sơ hành vi của chủ sở hữu thiết bị.
+    \end{itemize}
+    
+    Phương pháp tổ hợp được sử dụng là trung bình có trọng số thích ứng. Các trọng số tối ưu được tìm kiếm trên tập validation nhằm tối đa hóa chỉ số AUC, giúp hệ thống tự động cân bằng mức đóng góp của từng nguồn tín hiệu.
+
+    \section{Nhận dạng tập mở và lớp UNKNOWN}
+
+    \subsection{Bài toán closed-set và open-set}
+    
+    Phần lớn các hệ thống phân loại truyền thống hoạt động trong khung bài toán \textit{closed-set}: tập lớp cần phân biệt được xác định cố định từ trước và mô hình luôn gán đầu vào vào một trong các lớp đã biết. Tuy nhiên, cách tiếp cận này chưa phù hợp với các hệ thống triển khai thực tế, nơi mô hình có thể gặp những cá nhân chưa từng xuất hiện trong tập huấn luyện.
+    
+    Nhận dạng tập mở (\textit{open-set recognition}) giải quyết vấn đề này bằng cách trang bị cho mô hình khả năng từ chối phân loại khi đầu vào không thuộc bất kỳ lớp nào đã biết. Trong ngữ cảnh xác thực người dùng, đây chính là khả năng phát hiện ``người lạ'' --- một yêu cầu quan trọng để hệ thống có giá trị ứng dụng thực tiễn.
+    
+    Đáng chú ý, đây cũng là điểm mà nhiều công trình liên quan vẫn chưa giải quyết triệt để.
+    
+    \subsection{Cơ chế phát hiện UNKNOWN qua ngưỡng \textit{confidence}}
+    
+    Hệ thống đề xuất áp dụng cơ chế phát hiện UNKNOWN dựa trên ngưỡng \textit{confidence} thay vì bổ sung một lớp UNKNOWN tường minh trong tầng \textit{softmax}.
+    
+    Cụ thể, với mỗi người dùng (\textit{owner}), một mô hình CNN nhị phân riêng biệt được huấn luyện theo chiến lược \textit{1-vs-all} nhằm phân biệt owner ($label = 1$) với toàn bộ những người dùng còn lại ($label = 0$).
+    
+    Khi điểm tin cậy sau fusion (kết hợp dữ liệu inertial và touch) giảm xuống dưới ngưỡng $\theta$ trong một cửa sổ trượt gồm $N$ phiên liên tiếp, hệ thống coi đây là dấu hiệu xuất hiện người lạ và kích hoạt cơ chế xác thực dự phòng bằng gesture.
+    
+    Cách tiếp cận này đơn giản hơn so với việc xây dựng lớp UNKNOWN trong \textit{softmax}, đồng thời phù hợp với kiến trúc bộ phân loại nhị phân được lựa chọn trong Mục 3.4.1.
+    
+    \subsection{Vai trò trong hệ thống xác thực liên tục}
+    
+    Trong kiến trúc \textit{active authentication} của đề tài, cơ chế phát hiện dựa trên ngưỡng \textit{confidence} đóng vai trò kích hoạt xác thực dự phòng.
+    
+    Khi điểm tin cậy tích lũy giảm xuống dưới ngưỡng $\theta$, hệ thống sẽ hiển thị cảnh báo và yêu cầu người dùng xác thực bằng cử chỉ lắc điện thoại theo mẫu đã đăng ký trước đó.
+    
+    Thiết kế này tạo thành một vòng phản hồi khép kín:
+    
+    \begin{center}
+    xác thực hành vi thụ động liên tục
+    $\rightarrow$
+    phát hiện bất thường
+    $\rightarrow$
+    xác thực hành vi chủ động
+    $\rightarrow$
+    khôi phục phiên
+    \end{center}
+
+    \section{Active Authentication và Confidence Score}
+
+    \textit{Active authentication} là mô hình xác thực trong đó hệ thống liên tục duy trì đánh giá về danh tính người dùng thay vì chỉ thực hiện xác thực tại thời điểm đăng nhập ban đầu.
+    
+    Điểm tin cậy (\textit{confidence score}) được cập nhật sau mỗi phiên thu thập dữ liệu cảm biến, phản ánh xác suất ước tính rằng người đang sử dụng thiết bị chính là chủ sở hữu hợp lệ.
+    
+    Trong đề tài này, \textit{confidence score} được tính theo cơ chế cửa sổ trượt có trọng số. Cụ thể, kết quả dự đoán của $N$ phiên gần nhất được tổ hợp thông qua trung bình có trọng số, trong đó các phiên gần thời điểm hiện tại sẽ có trọng số cao hơn.
+    
+    Cơ chế này giúp hệ thống tránh phản ứng quá mức đối với các dự đoán sai lẻ do nhiễu, đồng thời vẫn có khả năng phát hiện kịp thời khi xuất hiện sự thay đổi hành vi liên tục.
+    
+    Khi điểm tin cậy giảm xuống dưới ngưỡng $\theta$ (được xác định thông qua thực nghiệm trên tập validation), hệ thống sẽ kích hoạt cơ chế xác thực dự phòng.
+
+    \section{Cơ chế xác thực dự phòng bằng cử chỉ lắc điện thoại}
+
+    Đề tài đề xuất một cơ chế xác thực dự phòng khi hệ thống phát hiện dấu hiệu của người lạ, dựa trên cùng nguyên lý của \textit{behavioral biometrics}: sử dụng hành vi lắc điện thoại như một dạng mật khẩu cử chỉ cá nhân.
+    
+    Người dùng sẽ đăng ký trước một mẫu cử chỉ lắc (ví dụ: ba lần lắc ngang nhanh) và thực hiện lại mẫu đó khi hệ thống yêu cầu xác thực bổ sung. Quá trình nhận diện được thực hiện thông qua dữ liệu accelerometer kết hợp với thuật toán phát hiện đỉnh gia tốc, không yêu cầu bổ sung bất kỳ cảm biến hay phần cứng chuyên dụng nào.
+    
+    Cơ chế này giải quyết trực tiếp hai vấn đề đã được xác định trước đó:
+    \begin{itemize}
+        \item Lỗ hổng trong các tình huống thiết bị đứng yên: kẻ tấn công đặt cố định thiết bị sẽ gặp khó khăn trong việc tái hiện chính xác mẫu cử chỉ lắc của chủ sở hữu.
+        
+        \item Thiếu cơ chế xác thực dự phòng trong các hệ thống trước đây: thay vì chỉ khóa màn hình như MultiLock~[3], hệ thống đề xuất cung cấp một phương thức xác thực lại có kiểm soát.
+    \end{itemize}
+    
+    Về mặt trải nghiệm người dùng, thao tác lắc điện thoại mang tính tự nhiên và trong nhiều trường hợp có thể thực hiện nhanh hơn so với nhập mã PIN. Đồng thời, thiết kế này vẫn duy trì tính nhất quán của hệ thống khi toàn bộ quá trình xác thực --- từ thụ động đến chủ động --- đều dựa trên cùng nguồn dữ liệu hành vi (\textit{behavioral biometrics}).
+
+    \section{Tổng quan các công trình liên quan}
+
+    Phần này phân tích các công trình tiêu biểu liên quan đến đề tài, bao gồm: phương pháp đề xuất, giải pháp hiện tại của từng công trình, hạn chế còn tồn tại, và bài học kế thừa.
+
+    \subsection{IntelliAuth --- Xác thực theo ngữ cảnh hoạt động}
+
+    \textbf{Phương pháp:} IntelliAuth (Ehatisham-ul-Haq et al., 2017) đề xuất một hệ thống xác thực người dùng smartphone dựa trên nhận diện sáu hoạt động thường ngày thông qua dữ liệu từ accelerometer, gyroscope và magnetometer (tổng cộng 9 trục cảm biến). Dữ liệu được thu thập từ 10 người dùng với 5 vị trí đặt điện thoại khác nhau trên cơ thể.
+    
+    \textbf{Giải pháp hiện tại:} Hệ thống xây dựng bộ phân loại hoạt động sử dụng bốn thuật toán gồm DT, KNN, BN và SVM, kết hợp 12 đặc trưng trong miền thời gian và miền tần số. Đóng góp nổi bật của IntelliAuth là chỉ ra rằng hành vi sử dụng điện thoại phụ thuộc mạnh vào ngữ cảnh hoạt động của người dùng, từ đó xây dựng một tầng nhận diện ngữ cảnh riêng nhằm cải thiện độ chính xác xác thực.
+    
+    Kết quả thực nghiệm cho thấy Bayes Net là lựa chọn tối ưu cho bài toán nhận diện hoạt động trên thiết bị di động, đạt độ chính xác 97,38\% với chi phí tính toán thấp. Ngoài ra, mô hình xác thực ba lớp --- \textit{authenticated}, \textit{supplementary} và \textit{impostor} --- cho phép hỗ trợ cơ chế ủy quyền giới hạn cho người dùng khác, đạt độ chính xác khoảng 87--90\%.
+    
+    \textbf{Hạn chế:} Hệ thống vẫn hoạt động trong khung bài toán \textit{closed-set}, chưa có cơ chế xử lý các đối tượng chưa từng xuất hiện trong tập huấn luyện; chưa khai thác dữ liệu touch; quy mô thực nghiệm còn nhỏ (10 người dùng) và chủ yếu được thực hiện trong môi trường kiểm soát; chưa hỗ trợ cơ chế \textit{active authentication} liên tục qua nhiều phiên sử dụng.
+    
+    \textbf{Kế thừa trong đề tài:} Đề tài kế thừa ý tưởng \textit{activity-aware authentication} cùng cấu trúc bộ phân loại hoạt động như một tầng ngữ cảnh, đồng thời mở rộng theo hướng xác thực đa phương thức (\textit{multimodal authentication}).
+    
+    \subsection{B2auth --- Touch biometrics trong điều kiện thực tế}
+
+    \textbf{Phương pháp:} B2auth (Mahfouz et al., 2024) tập trung vào sinh trắc học touchscreen trong điều kiện triển khai thực tế với 60 người dùng trong môi trường không kiểm soát, thu thập tổng cộng 34.621 sự kiện touch. Hệ thống trích xuất 22 đặc trưng từ hai loại gesture chính là \textit{tap} và \textit{slide}, sau đó huấn luyện mô hình MLP trên nền tảng Google Cloud Platform.
+    
+    \textbf{Giải pháp hiện tại:} Kiến trúc \textit{cloud training} kết hợp với \textit{on-device inference} giúp giải quyết đồng thời ba vấn đề thực tiễn: bảo vệ quyền riêng tư, giảm độ trễ suy luận và đảm bảo khả năng hoạt động ngoại tuyến. Mô hình sau huấn luyện được chuyển đổi sang định dạng TFLite để triển khai trực tiếp trên thiết bị di động.
+    
+    Trong các bài kiểm tra thực tế với ứng dụng mô phỏng tình huống thi cử và thanh toán, mô hình duy trì tỷ lệ nhận diện đúng chủ sở hữu trên 60\%, trong khi tỷ lệ chấp nhận đối với \textit{impostor} dưới 30\%. Hệ thống đạt AUC 0,87 đối với mô hình \textit{slide} và 0,78 đối với mô hình \textit{tap} trong giai đoạn huấn luyện.
+    
+    \textbf{Hạn chế:} Hệ thống chỉ dựa trên dữ liệu touchscreen mà chưa khai thác các cảm biến quán tính (\textit{inertial sensors}), do đó hiệu quả có thể suy giảm trong các tình huống thiết bị đứng yên hoặc người dùng không tương tác với màn hình. Ngoài ra, hệ thống chưa hỗ trợ cơ chế \textit{open-set recognition} và vẫn còn tỷ lệ EER tương đối cao (0,29--0,30) trong môi trường triển khai thực tế.
+    
+    \textbf{Kế thừa trong đề tài:} Đề tài kế thừa kiến trúc \textit{on-device inference} thông qua TFLite, phương pháp trích xuất đặc trưng động học touch, cũng như thiết kế thực nghiệm sử dụng ứng dụng riêng biệt để thu thập dữ liệu hành vi người dùng.
+    
+    \subsection{MultiLock --- Xác thực chủ động đa modal liên tục}
+
+    \textbf{Phương pháp:} MultiLock (Acien et al., 2019) đề xuất một khung \textit{active authentication} liên tục trên cơ sở dữ liệu UMDAA-02 gồm 48 người dùng được theo dõi trong vòng 2 tháng. Hệ thống tích hợp 7 nguồn dữ liệu khác nhau, bao gồm: touch gestures, \textit{keystroke dynamics}, accelerometer, gyroscope, WiFi, GPS và lịch sử sử dụng ứng dụng.
+    
+    \textbf{Giải pháp hiện tại:} Nghiên cứu xây dựng hai kịch bản xác thực:
+    \begin{itemize}
+        \item \textit{One-Time Authentication} (OTA): sử dụng một phiên dữ liệu duy nhất để xác thực.
+        
+        \item \textit{Active Authentication} (AA): tích lũy điểm tin cậy qua nhiều phiên liên tiếp bằng thuật toán QCD (\textit{Quickest Change Detection}).
+    \end{itemize}
+    
+    Kết quả thực nghiệm cho thấy cơ chế AA đạt độ chính xác 97,1\%, cao hơn đáng kể so với OTA (82,2\%), đồng thời chỉ cần khoảng 5 phiên liên tiếp để phát hiện kẻ xâm nhập.
+    
+    Ngoài ra, các đặc trưng hành vi theo ngữ cảnh như GPS, WiFi và lịch sử sử dụng ứng dụng luôn cải thiện hiệu quả xác thực so với việc chỉ sử dụng dữ liệu sinh trắc học thuần túy, trong đó GPS mang lại mức cải thiện lớn nhất (khoảng +13\%).
+    
+    \textbf{Hạn chế:} Cơ chế phản ứng khi phát hiện người lạ còn đơn giản, chủ yếu dừng ở việc khóa màn hình mà chưa có cơ chế xác thực dự phòng (\textit{fallback authentication}). Ngoài ra, hệ thống chưa hỗ trợ \textit{open-set recognition}, và bộ dữ liệu được thu thập trong bối cảnh người dùng sử dụng điện thoại nghiên cứu thay vì thiết bị cá nhân hằng ngày.
+    
+    \textbf{Kế thừa trong đề tài:} Đề tài kế thừa cơ chế \textit{active authentication} dựa trên điểm tin cậy tích lũy qua nhiều phiên, đồng thời tham khảo ý tưởng cập nhật điểm tin cậy theo hướng QCD.
+
+    \subsection{M2Auth --- Xác thực đa modal từ cảm biến chuyển động và touch}
+
+    \textbf{Phương pháp:} M2Auth đề xuất hệ thống xác thực người dùng đa modal trên thiết bị di động bằng cách kết hợp dữ liệu từ cảm biến quán tính và tương tác touch nhằm cải thiện độ ổn định xác thực trong các tình huống sử dụng thực tế. Hệ thống khai thác đồng thời accelerometer, gyroscope và các đặc trưng touch dynamics để xây dựng hồ sơ hành vi người dùng.
+    
+    \textbf{Giải pháp hiện tại:} Hệ thống thực hiện fusion giữa nhiều nguồn dữ liệu hành vi nhằm tận dụng tính bổ sung giữa chuyển động cơ thể và cách tương tác màn hình. Các đặc trưng được trích xuất từ cả miền thời gian và miền thống kê, sau đó đưa vào các mô hình học máy để thực hiện xác thực người dùng.
+    
+    Kết quả thực nghiệm cho thấy việc kết hợp đa modal giúp cải thiện đáng kể hiệu năng xác thực so với các mô hình đơn modal chỉ sử dụng inertial sensors hoặc touch data riêng lẻ. Đặc biệt, dữ liệu touch hỗ trợ hiệu quả trong các tình huống thiết bị đứng yên, trong khi dữ liệu chuyển động giúp duy trì khả năng xác thực ngay cả khi người dùng không thao tác trực tiếp trên màn hình.
+    
+    \textbf{Hạn chế:} Hệ thống chủ yếu tập trung vào bài toán phân loại người dùng đã biết (\textit{closed-set classification}) và chưa hỗ trợ cơ chế phát hiện người lạ (\textit{open-set recognition}). Ngoài ra, cơ chế phản ứng khi phát hiện bất thường chưa được nghiên cứu sâu, và việc đánh giá vẫn chủ yếu dựa trên các phiên sử dụng ngắn trong môi trường kiểm soát.
+    
+    \textbf{Kế thừa trong đề tài:} Đề tài kế thừa ý tưởng xác thực đa modal thông qua việc kết hợp dữ liệu inertial và touch ở mức điểm số (\textit{score-level fusion}), đồng thời mở rộng theo hướng \textit{active authentication}, phát hiện UNKNOWN và bổ sung cơ chế xác thực dự phòng bằng gesture.
+
+    \subsection{Tổng hợp điểm khác biệt giữa các công trình về ``đa modal''}
+
+    Qua phân tích bốn công trình liên quan, có thể thấy khái niệm ``đa modal'' được tiếp cận theo những hướng khác nhau.
+    
+    IntelliAuth~[1] kết hợp ba loại cảm biến quán tính gồm accelerometer, gyroscope và magnetometer. Tuy nhiên, toàn bộ các nguồn dữ liệu này đều thuộc nhóm \textit{inertial sensors} và chưa khai thác dữ liệu tương tác màn hình.
+    
+    B2auth~[2] chỉ tập trung vào dữ liệu touchscreen thông qua các hành vi \textit{tap} và \textit{slide}, mà không sử dụng dữ liệu từ các cảm biến chuyển động trong pipeline xác thực chính.
+    
+    MultiLock~[3] có phạm vi dữ liệu rộng hơn với 7 nguồn tín hiệu khác nhau, bao gồm touch gestures, cảm biến chuyển động, GPS, WiFi và lịch sử sử dụng ứng dụng. Tuy nhiên, một phần đáng kể trong số đó là các tín hiệu hành vi theo ngữ cảnh môi trường, phụ thuộc vào vị trí địa lý hoặc thói quen sử dụng dịch vụ, thay vì phản ánh trực tiếp đặc trưng vận động và tương tác cá nhân của người dùng.
+    
+    M2Auth~[4] là công trình gần nhất với hướng tiếp cận của đề tài khi kết hợp đồng thời dữ liệu inertial và touch nhằm cải thiện hiệu quả xác thực. Tuy nhiên, hệ thống chủ yếu tập trung vào bài toán xác thực trong phạm vi \textit{closed-set}, chưa hỗ trợ cơ chế phát hiện người lạ (\textit{open-set recognition}), chưa tích hợp tầng ngữ cảnh hoạt động và chưa nghiên cứu cơ chế xác thực dự phòng khi phát hiện bất thường.
+    
+    Từ đó có thể nhận thấy một khoảng trống nghiên cứu cụ thể: chưa có công trình nào trong các nghiên cứu tham chiếu đồng thời kết hợp:
+    \begin{itemize}
+        \item Dữ liệu inertial sensors và touch/keystroke dynamics,
+        
+        \item Tầng ngữ cảnh hoạt động (\textit{activity-aware authentication}),
+        
+        \item Cơ chế \textit{active authentication} liên tục,
+        
+        \item Phát hiện UNKNOWN/\textit{open-set recognition},
+        
+        \item Và cơ chế xác thực dự phòng dựa trên gesture.
+    \end{itemize}
+    
+    Đề tài này không hướng tới việc khẳng định tính mới tuyệt đối của mô hình xác thực đa modal, mà tập trung giải quyết khoảng trống cụ thể nói trên. Động lực của hướng tiếp cận này xuất phát từ tính bổ sung lẫn nhau giữa các nhóm tín hiệu: dữ liệu inertial phản ánh chuyển động cơ thể liên tục, trong khi dữ liệu touch và keystroke cung cấp thông tin hành vi trực tiếp trong quá trình tương tác với thiết bị.
+
+    \subsection{Nhận xét chung về khoảng trống nghiên cứu}
+    
+    Trong lĩnh vực \textit{behavioral biometrics} trên smartphone, ``đa modal'' là thuật ngữ được sử dụng với nhiều ý nghĩa khác nhau giữa các công trình nghiên cứu. Vì vậy, điểm khác biệt quan trọng cần làm rõ khi trình bày đóng góp của đề tài không chỉ nằm ở việc ``có hay không có đa modal'', mà còn ở ba khía cạnh chính:
+    \begin{itemize}
+        \item Loại tín hiệu được kết hợp trong hệ thống.
+        
+        \item Liệu các tín hiệu đó phản ánh đặc trưng sinh lý-vận động hay hành vi theo ngữ cảnh môi trường.
+        
+        \item Sự hiện diện của tầng ngữ cảnh hoạt động (\textit{activity-aware layer}).
+    \end{itemize}
+    
+    Dựa trên ba tiêu chí này, hệ thống được đề xuất trong đề tài có vị trí rõ ràng và mang tính khác biệt so với các công trình tham chiếu đã phân tích.
+
+    \section{Tổng hợp và khoảng trống nghiên cứu}
+
+    Bảng~2.1 tổng hợp so sánh đặc điểm của các công trình liên quan với hệ thống đề xuất theo các tiêu chí kỹ thuật quan trọng. Phân tích cho thấy chưa có công trình nào đồng thời đáp ứng bốn yêu cầu cốt lõi:
+    \begin{itemize}
+        \item Nhận diện ngữ cảnh hoạt động (\textit{activity-aware authentication}).
+        
+        \item Kết hợp dữ liệu \textit{inertial sensors} với \textit{touch/keystroke dynamics} thuần sinh trắc học.
+        
+        \item Hỗ trợ \textit{open-set recognition} với cơ chế phát hiện người lạ rõ ràng.
+        
+        \item Cơ chế xác thực dự phòng bằng hành vi khi phát hiện bất thường.
+    \end{itemize}
+    
+    Đây chính là khoảng trống nghiên cứu mà đề tài này hướng tới giải quyết.
+    
+    \begin{table}[H]
+    \centering
+    \caption{So sánh các công trình liên quan và hệ thống đề xuất}
+    \label{tab:related_work_compare}
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{|p{4cm}|c|c|c|c|c|}
+    \hline
+    \textbf{Tiêu chí} & \textbf{IntelliAuth [1]} & \textbf{B2auth [2]} & \textbf{MultiLock [3]} & \textbf{M2Auth [4]} & \textbf{Đề tài} \\
+    \hline
+    
+    Inertial (acc/gyro/mag) 
+    & Có 
+    & Không 
+    & Có (acc+gyro) 
+    & Có 
+    & Có $\checkmark$ \\
+    \hline
+    
+    Touch / scroll dynamics 
+    & Không 
+    & Có 
+    & Có 
+    & Có 
+    & Có $\checkmark$ \\
+    \hline
+    
+    Keystroke dynamics 
+    & Không 
+    & Không 
+    & Có 
+    & Không 
+    & Có $\checkmark$ \\
+    \hline
+    
+    Activity context 
+    & Có (6 ADL) 
+    & Không 
+    & Không 
+    & Không 
+    & Có (3 ADL) $\checkmark$ \\
+    \hline
+    
+    Open-set / phát hiện người lạ 
+    & Không 
+    & Không 
+    & Không 
+    & Không 
+    & Có $\checkmark$ \\
+    \hline
+    
+    Active authentication liên tục 
+    & Không 
+    & Có 
+    & Có 
+    & Có 
+    & Có $\checkmark$ \\
+    \hline
+    
+    Fallback khi phát hiện người lạ 
+    & Không 
+    & Không 
+    & Khóa màn hình 
+    & Không 
+    & Gesture lắc $\checkmark$ \\
+    \hline
+    
+    Môi trường thu thập 
+    & Lab 
+    & Thực tế 
+    & Thực tế 
+    & Lab 
+    & Lab \\
+    \hline
+    
+    Mô hình chính 
+    & BayesNet/SVM 
+    & MLP/TFLite 
+    & SVM+QCD 
+    & Fusion model 
+    & CNN+SVM \\
+    \hline
+    
+    Hiệu suất báo cáo 
+    & $\sim$88\% acc 
+    & AUC 0,87 
+    & 97,1\% acc 
+    & Improved multimodal accuracy 
+    & [TBD] \\
+    \hline
+    
+    \end{tabular}
+    \end{table}
+    
+    Từ phân tích trên, hệ thống đề xuất trong đề tài được thiết kế nhằm kế thừa các điểm mạnh của từng công trình:
+    \begin{itemize}
+        \item Tầng ngữ cảnh hoạt động từ IntelliAuth~[1].
+        
+        \item Kiến trúc \textit{on-device inference} từ B2auth~[2].
+        
+        \item Cơ chế \textit{active authentication} tích lũy điểm tin cậy qua nhiều phiên từ MultiLock~[3].
+        
+        \item Ý tưởng fusion giữa dữ liệu inertial và touch từ M2Auth~[4].
+    \end{itemize}
+    
+    Đồng thời, đề tài hướng tới giải quyết khoảng trống chung của các nghiên cứu trước đây thông qua:
+    \begin{itemize}
+        \item Kết hợp đồng thời dữ liệu inertial và \textit{touch/keystroke dynamics} thuần sinh trắc học.
+        
+        \item Bổ sung cơ chế \textit{open-set recognition}.
+        
+        \item Xây dựng cơ chế xác thực dự phòng bằng gesture khi phát hiện bất thường.
+    \end{itemize}
+
+\end{document}

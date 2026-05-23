@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <!-- ── PHASE 1: IMU enrollment ── -->
+
+        <TextView
+            android:id="@+id/titleText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/enroll_owner_title"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/hintText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/enroll_owner_hint"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/enrollSummary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:padding="12dp"
+            android:background="#22000000"
+            android:textSize="14sp" />
+
+        <ProgressBar
+            android:id="@+id/enrollProgress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="24dp"
+            android:layout_marginTop="32dp"
+            android:max="6"
+            android:progress="0" />
+
+        <TextView
+            android:id="@+id/enrollStatusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="@string/enroll_owner_ready"
+            android:textSize="16sp" />
+
+        <Button
+            android:id="@+id/btnStartEnroll"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="24dp"
+            android:text="@string/enroll_owner_start_btn"
+            android:textSize="16sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnClearProfile"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:text="@string/enroll_owner_clear_btn" />
+
+            <Button
+                android:id="@+id/btnDoneEnroll"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="@string/enroll_owner_done_btn" />
+        </LinearLayout>
+
+        <!-- ── PHASE 2: Touch collection (hidden until Phase 1 done) ── -->
+
+        <LinearLayout
+            android:id="@+id/touchEnrollSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#CCCCCC"
+                android:layout_marginBottom="16dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Bước 2: Thu thập hành vi chạm"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/touchStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Hãy cuộn đọc, chọn đáp án và gõ câu trả lời bên dưới."
+                android:textSize="14sp"
+                android:textColor="#555555" />
+
+            <!-- Quiz passage to scroll through -->
+            <TextView
+                android:id="@+id/quizPassage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:padding="12dp"
+                android:background="#F5F5F5"
+                android:textSize="14sp"
+                android:lineSpacingMultiplier="1.5"
+                android:text="Xác thực hành vi sinh trắc học là công nghệ cho phép hệ thống nhận dạng người dùng dựa trên cách họ tương tác với thiết bị, thay vì chỉ dựa vào mật khẩu hay vân tay. Các đặc trưng như thời gian nhấn, tốc độ cuộn màn hình, nhịp gõ phím và quỹ đạo ngón tay đều mang thông tin sinh trắc đặc trưng cho mỗi cá nhân. Phương pháp này hoạt động liên tục trong nền, không làm gián đoạn người dùng, và có khả năng phát hiện kẻ mạo danh ngay cả sau khi thiết bị đã được mở khóa." />
+
+            <!-- MCQ tap buttons -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:textStyle="bold"
+                android:text="Câu 1: Xác thực hành vi hoạt động như thế nào?" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical">
+
+                <Button
+                    android:id="@+id/btnAnswerA"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:text="A. Kiểm tra mật khẩu" />
+
+                <Button
+                    android:id="@+id/btnAnswerB"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:text="B. Phân tích cách tương tác" />
+
+                <Button
+                    android:id="@+id/btnAnswerC"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:text="C. Quét khuôn mặt" />
+
+                <Button
+                    android:id="@+id/btnAnswerD"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:text="D. Đọc vân tay" />
+            </LinearLayout>
+
+            <!-- Keystroke collection -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:textStyle="bold"
+                android:text="Gõ câu trả lời ngắn gọn:" />
+
+            <EditText
+                android:id="@+id/touchKeyInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="Nhập ít nhất 20 ký tự..."
+                android:inputType="textMultiLine"
+                android:minLines="3"
+                android:background="@android:drawable/edit_text" />
+
+            <!-- Touch stats display -->
+            <TextView
+                android:id="@+id/touchStatsText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:textSize="13sp"
+                android:textColor="#666666"
+                android:text="Tap: 0  |  Cuộn: 0  |  Phím: 0" />
+
+            <!-- Confirm touch done & train RF -->
+            <Button
+                android:id="@+id/btnTrainRF"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="16dp"
+                android:text="Xác nhận và Huấn luyện mô hình"
+                android:textSize="16sp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

@@ -1,0 +1,67 @@
+\documentclass[../DoAn.tex]{subfiles}
+\begin{document}
+    \section{Đóng góp của đồ án}
+
+    Đồ án này đã đưa ra những đóng góp quan trọng trong việc giải quyết bài toán  Pickup and Delivery Problem with Time Windows (PDPTW) thông qua phương pháp Hybrid AGES-LNS:
+
+    \begin{enumerate}
+        \item \textbf{Thiết kế thuật toán hybrid hiệu quả}: Đã phát triển thành công cơ chế kết hợp giữa Adaptive Genetic Search (AGES) và Large Neighborhood Search (LNS), tận dụng được ưu điểm của cả hai phương pháp - khả năng giảm thiểu đội xe của AGES và khả năng tối ưu hóa quãng đường của LNS.
+
+        \item \textbf{Cơ chế phân rã bài toán}: Áp dụng chiến lược Decomposition cho phép giải quyết hiệu quả các bài toán quy mô lớn (Large Scale) mà các phương pháp truyền thống gặp khó khăn.
+
+        \item \textbf{Tối ưu hóa đa mục tiêu phân cấp}: Giải quyết bài toán theo hướng ưu tiên giảm số lượng xe trước, sau đó mới tối ưu quãng đường, phù hợp với thực tế vận hành logistics.
+    \end{enumerate}
+
+    \section{Tổng quan kết quả đạt được}
+
+    Đồ án đã thành công trong việc nghiên cứu, thiết kế và cài đặt thuật toán Hybrid AGES-LNS để giải quyết bài toán PDPTW. Những kết quả chính đạt được bao gồm:
+
+    \subsection{Về mặt lý thuyết}
+
+    \begin{itemize}
+        \item \textbf{Phân tích toàn diện bài toán PDPTW}: Đưa ra mô hình toán học đầy đủ với các ràng buộc phức tạp.
+
+        \item \textbf{Nghiên cứu sâu về LNS và AGES}: Trình bày chi tiết nguyên lý hoạt động của các toán tử Destroy/Repair trong LNS và cơ chế Ejection Chains trong AGES.
+
+        \item \textbf{Chiến lược tìm kiếm thích nghi}: Sử dụng Record to Record Travel và Simulated Annealing để cân bằng giữa khám phá (exploration) và khai thác (exploitation).
+    \end{itemize}
+
+    \subsection{Về mặt thực nghiệm}
+
+    \begin{itemize}
+        \item \textbf{Hiệu quả giảm đội xe}: Thuật toán AGES chứng minh khả năng vượt trội trong việc tìm kiếm số lượng xe tối thiểu, thường đạt được kết quả tốt hơn so với các phương pháp tham lam thuần túy.
+
+        \item \textbf{Tối ưu hóa quãng đường}: LNS với các toán tử đa dạng giúp cải thiện đáng kể tổng quãng đường di chuyển sau khi số lượng xe đã được cố định.
+
+        \item \textbf{Khả năng mở rộng (Scalability)}: Chiến lược Decomposition cho phép thuật toán hoạt động ổn định trên các bộ dữ liệu lớn (lên đến 5000 nodes).
+    \end{itemize}
+
+    \section{Hạn chế và hướng phát triển}
+
+    \subsection{Hạn chế hiện tại}
+
+    \begin{itemize}
+        \item \textbf{Phụ thuộc tham số}: Hiệu quả của thuật toán phụ thuộc khá nhiều vào việc tinh chỉnh các tham số như kích thước phá hủy (destroy size) hay ngưỡng chấp nhận (acceptance threshold).
+    \end{itemize}
+
+    \subsection{Hướng phát triển tương lai}
+
+    \begin{itemize}
+        \item \textbf{Adaptive LNS (ALNS)}: Tự động điều chỉnh xác suất chọn các toán tử dựa trên hiệu quả của chúng trong quá trình tìm kiếm.
+
+        \item \textbf{Machine Learning Integration}: Sử dụng ML để dự đoán các tham số tối ưu hoặc hướng dẫn các toán tử tìm kiếm.
+    \end{itemize}
+
+    \section{Kết luận}
+
+    Đồ án đã thành công trong việc phát triển và đánh giá thuật toán Hybrid AGES-LNS cho bài toán PDPTW. Kết quả nghiên cứu cho thấy đây là một cách tiếp cận hiện đại, mạnh mẽ và phù hợp cho các bài toán vận tải quy mô lớn.
+
+    Kết quả thực nghiệm đã chỉ ra những điểm mạnh và hạn chế cụ thể:
+    \begin{itemize}
+        \item \textbf{Hiệu quả trên bộ dữ liệu chuẩn}: Với bộ dữ liệu kinh điển Li \& Lim (2001), thuật toán đạt được kết quả rất sát với Best Known (sai số chỉ khoảng 1\%), chứng minh độ tin cậy cao.
+        \item \textbf{Khả năng tối ưu hóa}: Thuật toán thể hiện khả năng tối ưu hóa số lượng xe (Routes) rất tốt, thường xuyên vượt qua các phương pháp tham lam và OR-tools trên các bộ dữ liệu nhỏ và trung bình.
+        \item \textbf{Thách thức với dữ liệu mới}: Trên bộ dữ liệu Sartori \& Buriol (2020) với quy mô lớn và ràng buộc phức tạp hơn, thuật toán vẫn còn khoảng cách đáng kể so với Best Known (20-30\% về số xe), đặc biệt là trên các instance có cửa sổ thời gian chặt chẽ.
+    \end{itemize}
+
+    Việc kết hợp khéo léo giữa các kỹ thuật metaheuristic khác nhau (AGES cho fleet minimization và LNS cho distance minimization) đã tạo ra một bộ giải linh hoạt. Tuy nhiên, để đạt được hiệu suất cao nhất trên mọi loại dữ liệu, cần tiếp tục nghiên cứu cải tiến các cơ chế thích nghi và xử lý ràng buộc trong tương lai.
+\end{document}

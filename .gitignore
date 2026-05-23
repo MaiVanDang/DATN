@@ -1,0 +1,12 @@
+.gradle/
+.idea/
+build/
+*.log
+*.apk
+*.dex
+*.aux
+*.log
+*.synctex.gz
+*.synctex(busy)
+*.toc
+*.out

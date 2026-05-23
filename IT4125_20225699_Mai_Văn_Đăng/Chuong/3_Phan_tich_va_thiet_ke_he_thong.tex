@@ -1,0 +1,331 @@
+\documentclass[../DoAn.tex]{subfiles}
+\begin{document}
+    \section{Kiến trúc tổng thể}
+
+    Hệ thống được thiết kế theo kiến trúc ba tầng tách biệt rõ ràng, giúp từng tầng có thể phát triển, bảo trì và thay thế một cách độc lập.
+    
+    Tầng thứ nhất là tầng thu thập dữ liệu, được thực thi hoàn toàn trên thiết bị Android thông qua ứng dụng \textit{BioAuth Data Collection}. Tầng này chịu trách nhiệm ghi nhận dữ liệu từ cảm biến chuyển động và hành vi tương tác màn hình, sau đó đóng gói dữ liệu dưới dạng file ZIP chứa các tệp CSV.
+    
+    Tầng thứ hai là tầng xử lý và huấn luyện, được thực thi trên máy tính thông qua môi trường Python. Dữ liệu thu thập từ tầng thứ nhất sẽ được tiền xử lý, trích xuất đặc trưng và đưa vào huấn luyện với hai mô hình phân loại chính là SVM và CNN 1D. Sau quá trình huấn luyện, mô hình được chuyển đổi sang định dạng TFLite để tối ưu cho thiết bị di động.
+    
+    Tầng thứ ba là tầng triển khai và xác thực, thực thi trở lại trên thiết bị Android. Tầng này chịu trách nhiệm nạp mô hình TFLite để thực hiện suy luận theo thời gian thực (\textit{real-time inference}), duy trì cơ chế xác thực liên tục và kích hoạt xác thực dự phòng khi cần thiết.
+    
+    Kiến trúc trên áp dụng mô hình \textit{cloud training --- on-device inference} tương tự B2auth, qua đó đảm bảo quyền riêng tư của người dùng: dữ liệu thô không cần gửi lên máy chủ sau giai đoạn huấn luyện ban đầu, đồng thời toàn bộ quá trình xác thực được thực hiện ngoại tuyến trực tiếp trên thiết bị.
+
+    \begin{figure}[htbp]
+        \centering
+        \includegraphics[width=0.8\textwidth]{IT4125_20225699_Mai_Văn_Đăng/Hinh_ve/kientruc_3tang.png}
+        \caption{Kiến trúc hệ thống 3 tầng}
+        \label{fig:kientruc_3tang}
+    \end{figure}
+
+    \section{Quy trình hoạt động}
+
+    \subsection{Luồng đăng ký (Enrollment)}
+
+    Luồng đăng ký là quá trình được thực hiện một lần nhằm xây dựng mô hình nhận dạng cho người dùng.
+    
+    Người tham gia cài đặt ứng dụng \textit{BioAuth Data Collection} và thực hiện phiên thu thập dữ liệu kéo dài khoảng 30 phút theo kịch bản đã thiết kế trước (ba hoạt động $\times$ hai lượt thực hiện kết hợp với biểu mẫu thu thập touch data). Sau khi hoàn tất, dữ liệu được đóng gói thành file ZIP và chuyển về máy tính phục vụ nghiên cứu.
+    
+    Trên máy tính, pipeline tiền xử lý thực hiện các bước:
+    \begin{itemize}
+        \item Resample dữ liệu về lưới thời gian đều với tần số 50~Hz.
+        
+        \item Phát hiện và xử lý các khoảng dữ liệu thiếu (\textit{missing gaps}).
+        
+        \item Chuẩn hóa dữ liệu bằng phương pháp Z-score theo từng kênh cảm biến trên từng cửa sổ dữ liệu.
+        
+        \item Chia dữ liệu thành các cửa sổ gồm 100 mẫu (tương ứng 2 giây) với bước trượt 50 mẫu (\textit{50\% overlap}).
+    \end{itemize}
+    
+    Hai mô hình CNN 1D và SVM được huấn luyện song song, sau đó kết quả được so sánh để lựa chọn mô hình có hiệu năng tốt hơn.
+    
+    Mô hình cuối cùng được chuyển đổi sang định dạng TFLite với lượng tử hóa INT8 nhằm tối ưu triển khai trên thiết bị Android.
+    
+    Quá trình phân chia tập \textit{train/validation/test} sử dụng chiến lược \textit{session-aware split}, tức dữ liệu từ cùng một session không xuất hiện đồng thời ở nhiều tập khác nhau. Cách tiếp cận này giúp đảm bảo đánh giá trung thực và tránh hiện tượng \textit{data leakage} qua biên session.
+    
+    \subsection{Luồng xác thực thời gian thực (Authentication)}
+    
+    Sau khi mô hình TFLite được triển khai vào ứng dụng demo, hệ thống xác thực hoạt động liên tục và trong suốt đối với người dùng.
+    
+    \textit{Foreground Service} thu thập dữ liệu cảm biến theo cơ chế kích hoạt sự kiện: mỗi khi phát hiện màn hình được bật hoặc xuất hiện chuyển động đáng kể, hệ thống sẽ ghi nhận một phiên dữ liệu kéo dài 2 giây (100 mẫu) ở chế độ \textit{SENSOR\_DELAY\_GAME} ($\sim$50~Hz).
+    
+    Dữ liệu thu được sẽ được chuẩn hóa bằng các tham số trong file \texttt{scaler\_params.json} đã lưu từ giai đoạn huấn luyện, sau đó đưa vào mô hình TFLite để thực hiện suy luận và tính toán điểm tin cậy.
+    
+    Kết quả xác thực được tích lũy trên cửa sổ trượt gồm 5 phiên gần nhất để tính \textit{confidence score}. Khi điểm tin cậy giảm xuống dưới ngưỡng $\theta$ hoặc hệ thống liên tục nhận diện UNKNOWN, cơ chế xác thực dự phòng bằng cử chỉ lắc điện thoại sẽ được kích hoạt.
+
+    \section{Thiết kế thu thập dữ liệu}
+
+    \subsection{Lựa chọn tần số lấy mẫu}
+    
+    Tần số lấy mẫu 50~Hz được lựa chọn dựa trên khuyến nghị từ IntelliAuth và các nghiên cứu liên quan về nhận diện hoạt động trên thiết bị di động.
+    
+    Mức tần số này đủ cao để nắm bắt các đặc trưng động học của chuyển động con người, chẳng hạn như nhịp bước chân (khoảng 0,5--1~Hz) hoặc rung lắc tay ($\sim$2--5~Hz), trong khi vẫn duy trì mức tiêu thụ năng lượng chấp nhận được trên thiết bị di động.
+    
+    Ở tần số 50~Hz, mỗi cửa sổ dữ liệu dài 2 giây sẽ chứa 100 mẫu. Kích thước này đủ để mô hình CNN 1D học được các mẫu cục bộ đặc trưng (\textit{local patterns}) thông qua các phép tích chập theo thời gian.
+    
+    Ngoài ra, tần số lấy mẫu 50~Hz cũng phù hợp với dải tần số sinh lý của hành vi người dùng, vốn thường nhỏ hơn 20~Hz. Theo định lý lấy mẫu Nyquist, mức lấy mẫu này đủ để bảo toàn thông tin cần thiết của tín hiệu hành vi.
+
+    \subsection{Thiết kế cửa sổ sliding window}
+
+    Kỹ thuật \textit{sliding window} được áp dụng để chuyển đổi chuỗi thời gian liên tục thành các mẫu dữ liệu rời rạc phục vụ quá trình huấn luyện mô hình.
+    
+    Trong đề tài này, mỗi cửa sổ có kích thước 100 mẫu (tương ứng 2 giây dữ liệu) với bước dịch 50 mẫu (\textit{50\% overlap}).
+    
+    Cơ chế overlap 50\% giúp tăng đáng kể số lượng mẫu huấn luyện mà không cần thu thập thêm dữ liệu mới, đồng thời duy trì tính liên tục giữa các cửa sổ liên tiếp. Nhờ đó, mô hình có thể học được các mẫu hành vi (\textit{patterns}) mà không bị gián đoạn đột ngột tại biên cửa sổ.
+    
+    Kết quả thực nghiệm cho thấy pipeline đã tạo ra tổng cộng 95.308 cửa sổ dữ liệu inertial từ 15 người tham gia trên 3 hoạt động khác nhau, bao gồm: đi bộ 35.281, ngồi 31.877 và đứng 28.150 windows.
+
+    \subsection{Cấu trúc dữ liệu đa kênh}
+
+    Mỗi cửa sổ dữ liệu được biểu diễn dưới dạng tensor có kích thước $(100, 9)$, bao gồm 9 kênh tín hiệu: ba trục của gia tốc kế: \texttt{acc\_x}, \texttt{acc\_y}, \texttt{acc\_z}, ba trục của con quay hồi chuyển: \texttt{gyro\_x}, \texttt{gyro\_y}, \texttt{gyro\_z}, ba trục của cảm biến từ trường: \texttt{mag\_x}, \texttt{mag\_y}, \texttt{mag\_z}.
+    
+    Việc kết hợp đồng thời ba loại cảm biến giúp cải thiện khả năng phân biệt giữa các hoạt động có chuyển động tịnh tiến tương đồng nhưng khác nhau về hướng và tư thế thiết bị.
+    
+    Ngoài ra, cách thiết kế này cũng phù hợp với khuyến nghị từ IntelliAuth trong việc giảm ảnh hưởng của hiện tượng \textit{position sensitivity} đối với bài toán xác thực hành vi.
+    
+    Trong trường hợp thiết bị không hỗ trợ cảm biến từ trường, hệ thống sẽ tự động điền giá trị $0$ cho ba kênh \texttt{mag} tương ứng nhằm đảm bảo cấu trúc tensor đầu vào luôn nhất quán.
+
+    \section{Thiết kế mô hình phân loại}
+
+    \subsection{Kiến trúc CNN 1D}
+
+    Mô hình CNN 1D được thiết kế gồm ba khối tích chập với số lượng bộ lọc tăng dần theo cấu trúc:
+    \[
+    64 \rightarrow 128 \rightarrow 256
+    \]
+    
+    Mỗi khối bao gồm một lớp \textit{Conv1D} (kernel size bằng 5 ở khối đầu tiên và bằng 3 ở hai khối sau), theo sau bởi \textit{Batch Normalization}, hàm kích hoạt ReLU và lớp \textit{MaxPooling1D}. Riêng ở khối cuối, \textit{AdaptiveAvgPool1D} được sử dụng nhằm giảm kích thước đặc trưng đầu ra theo cách linh hoạt hơn.
+    
+    Sau ba khối tích chập, lớp \textit{GlobalAveragePooling1D} được sử dụng thay cho \textit{Flatten} nhằm giảm số lượng tham số và hạn chế hiện tượng \textit{overfitting}. Phần phân loại phía sau gồm hai lớp Dense theo cấu trúc:
+    \[
+    256 \rightarrow 128 \rightarrow 1
+    \]
+    kết hợp với \textit{dropout} 0,4 và lớp đầu ra dạng single-logit phù hợp cho bài toán phân loại nhị phân (\textit{binary classification}).
+    
+    Tổng số tham số của mô hình khoảng 160\,K, đủ nhỏ để triển khai trên thiết bị di động thông qua TFLite với lượng tử hóa INT8 (kích thước khoảng 170~KB sau lượng tử hóa).
+    
+    Bài toán xác thực được mô hình hóa theo kiến trúc \textit{1-vs-all}: với mỗi người dùng cần xác thực (\textit{owner}), một mô hình CNN nhị phân riêng được huấn luyện nhằm phân biệt owner ($label = 1$) với toàn bộ những người dùng còn lại (\textit{impostor}, $label = 0$).
+    
+    \textit{Loss function} sử dụng \textit{BCEWithLogitsLoss} với trọng số:
+    \[
+    pos\_weight = \frac{n_{neg}}{n_{pos}}
+    \]
+    nhằm xử lý hiện tượng mất cân bằng dữ liệu tự nhiên giữa một owner và nhiều impostor.
+    
+    Cách tiếp cận này đơn giản, trực quan và phù hợp với môi trường triển khai thực tế, nơi mỗi thiết bị thường chỉ có một chủ sở hữu chính thay vì nhiều lớp người dùng như trong bài toán phân loại đa lớp.
+    
+    Cơ chế phát hiện \textit{open-set} được thực hiện thông qua ngưỡng \textit{confidence} trên đầu ra sigmoid, thay vì xây dựng một lớp UNKNOWN tường minh trong tầng \textit{softmax}.
+
+    \subsection{Pipeline SVM với đặc trưng thủ công}
+
+    SVM sử dụng kernel RBF (\textit{Radial Basis Function}) nhờ khả năng xử lý hiệu quả dữ liệu phi tuyến tính.
+    
+    Trước khi đưa vào SVM, mỗi cửa sổ dữ liệu có kích thước $(100, 9)$ được chuyển đổi thành vector đặc trưng nhiều chiều, bao gồm:
+    \begin{itemize}
+        \item Đặc trưng miền thời gian: \textit{mean}, \textit{std}, \textit{min}, \textit{max}, \textit{range}, RMS, \textit{energy}, \textit{zero-crossing rate}, \textit{skewness}, \textit{kurtosis}  
+        ($10$ đặc trưng $\times$ $9$ kênh $= 90$ đặc trưng).
+        
+        \item Đặc trưng miền tần số: top-3 FFT magnitudes  
+        ($3 \times 9 = 27$ đặc trưng).
+        
+        \item Đặc trưng tương quan chéo giữa các kênh (\textit{cross-channel correlation}):  
+        \texttt{acc\_x/acc\_y}, \texttt{acc\_y/acc\_z}, \texttt{acc\_x/gyro\_x}  
+        ($3$ đặc trưng).
+        
+        \item Chỉ số \textit{Signal Magnitude Area} (SMA):  
+        \texttt{SMA\_acc}, \texttt{SMA\_gyro}  
+        ($2$ đặc trưng).
+    \end{itemize}
+    
+    Tổng cộng, vector đặc trưng đầu vào có 122 chiều. Các siêu tham số $C$ và $\gamma$ được tối ưu thông qua \textit{GridSearchCV} với chiến lược \textit{5-fold cross-validation}.
+    
+    \begin{table}[H]
+    \centering
+    \caption{So sánh thiết kế CNN 1D và SVM}
+    \label{tab:cnn_vs_svm}
+    \renewcommand{\arraystretch}{1.3}
+    
+    \begin{tabular}{|p{4cm}|p{5cm}|p{5cm}|}
+    \hline
+    \textbf{Tiêu chí} & \textbf{CNN 1D} & \textbf{SVM (RBF)} \\
+    \hline
+    
+    Đầu vào 
+    & Tensor $(100, 9)$ --- raw signal 
+    & Vector 122 chiều --- handcrafted features \\
+    \hline
+    
+    Feature engineering 
+    & Tự động thông qua convolution 
+    & Thủ công (time + FFT + cross-channel) \\
+    \hline
+    
+    Số tham số 
+    & $\sim$160\,K 
+    & Phụ thuộc $C$, $\gamma$ và số lượng support vectors \\
+    \hline
+    
+    Kích thước mô hình (sau tối ưu) 
+    & $\sim$170~KB (TFLite INT8) 
+    & $\sim$38~KB (\texttt{pickle}) \\
+    \hline
+    
+    Thời gian suy luận (dự kiến) 
+    & $\sim$10--15~ms 
+    & $\sim$2--5~ms \\
+    \hline
+    
+    Ưu điểm 
+    & Không cần \textit{feature engineering}, học được các mẫu phức tạp 
+    & Hiệu quả với tập dữ liệu nhỏ, suy luận nhanh, dễ giải thích \\
+    \hline
+    
+    Nhược điểm 
+    & Cần nhiều dữ liệu huấn luyện hơn, thời gian suy luận cao hơn 
+    & Phụ thuộc mạnh vào chất lượng đặc trưng trích xuất \\
+    \hline
+    
+    \end{tabular}
+    \end{table}
+
+    \section{Thiết kế Active Authentication}
+
+    \subsection{Cơ chế confidence score}
+
+    Thay vì chỉ xác thực tại một thời điểm duy nhất, hệ thống duy trì liên tục một điểm tin cậy (\textit{confidence score}) ký hiệu là $S$, được cập nhật sau mỗi phiên đo cảm biến.
+    
+    Điểm tin cậy được tính theo trung bình có trọng số của $N = 5$ phiên gần nhất, trong đó các phiên gần hơn sẽ nhận trọng số cao hơn theo hàm suy giảm mũ:
+    
+    \[
+    S_t =
+    \frac{
+    \sum_{i=1}^{N} \left( w_i \times p_{legit,i} \right)
+    }{
+    \sum_{i=1}^{N} w_i
+    }
+    \]
+    với:
+    \[
+    w_i = \alpha^{(N-i)}, \qquad \alpha = 0,8
+    \]
+    
+    Trong đó:
+    \begin{itemize}
+        \item $p_{legit,i}$ là xác suất người dùng hợp lệ tại phiên thứ $i$, được lấy từ đầu ra sigmoid của bộ phân loại nhị phân.
+        
+        \item $w_i$ là trọng số của phiên thứ $i$.
+        
+        \item $\alpha$ là hệ số suy giảm theo thời gian.
+    \end{itemize}
+    
+    Cơ chế trọng số suy giảm theo hàm mũ giúp các phiên gần nhất chiếm tỷ trọng lớn hơn trong tổng điểm tin cậy. Với $\alpha = 0,8$ và $N = 5$, hệ thống có thể phản ứng nhanh với sự thay đổi hành vi trong khi vẫn giảm ảnh hưởng của nhiễu xuất hiện ở một phiên đơn lẻ.
+    
+    \subsection{Ngưỡng quyết định và trạng thái hệ thống}
+    
+    \begin{table}[H]
+    \centering
+    \caption{Trạng thái hệ thống theo confidence score}
+    \label{tab:confidence_state}
+    \renewcommand{\arraystretch}{1.3}
+    
+    \begin{tabular}{|c|c|p{3.2cm}|p{3.5cm}|}
+    \hline
+    \centering\textbf{Trạng thái} &
+    \centering\textbf{Điều kiện} &
+    \centering\arraybackslash\textbf{Biểu hiện UI} &
+    \centering\arraybackslash\textbf{Hành động} \\
+    \hline
+    
+    TRUSTED 
+    & $S \geq 0.75$ 
+    & Biểu tượng khóa xanh 
+    & Tiếp tục hoạt động bình thường \\
+    \hline
+    
+    WARNING 
+    & $0.45 \leq S < 0.75$ 
+    & Biểu tượng cảnh báo vàng 
+    & Ghi log, chuẩn bị \textit{fallback} \\
+    \hline
+    
+    UNKNOWN 
+    & $S < 0.45$ 
+    & Màn hình cảnh báo đỏ 
+    & Kích hoạt gesture \textit{fallback} \\
+    \hline
+    
+    \end{tabular}
+    \end{table}
+    
+    Hai ngưỡng $0,75$ và $0,45$ được lựa chọn dựa trên thực nghiệm trên tập validation theo tiêu chí cân bằng giữa FAR và FRR (sẽ được trình bày chi tiết tại Mục~6.4).
+    
+    Vùng WARNING nằm giữa hai ngưỡng đóng vai trò như một vùng đệm (\textit{buffer zone}). Khi confidence score dao động quanh ranh giới quyết định, hệ thống sẽ không phản ứng ngay lập tức mà chỉ tăng cường giám sát cho đến khi xuất hiện tín hiệu rõ ràng hơn.
+    
+    \section{Thiết kế Gesture Fallback}
+
+    Hệ thống xác thực dự phòng (\textit{gesture fallback}) sử dụng các mẫu lắc điện thoại (\textit{shake patterns}) được định nghĩa trước nhằm đại diện cho các mã xác thực từ 0 đến 9. Mỗi pattern được đặc trưng bởi số lần lắc và cường độ dao động theo trục ngang của thiết bị.
+    
+    Thuật toán phát hiện cử chỉ được xây dựng dựa trên phương pháp \textit{peak detection} áp dụng trên tín hiệu gia tốc kế theo trục $X$. Một đỉnh được ghi nhận khi:
+    \[
+    |acc_x| > 8~m/s^2
+    \]
+    
+    Để tránh hiện tượng phát hiện trùng lặp do dao động liên tục hoặc nhiễu cảm biến, cơ chế \textit{debounce} với khoảng thời gian 200~ms được áp dụng giữa hai đỉnh liên tiếp.
+    
+    Ngoài ra, hệ thống cho phép sai số $\pm 1$ lần lắc so với pattern đã đăng ký nhằm cân bằng giữa độ chính xác xác thực và trải nghiệm người dùng trong điều kiện sử dụng thực tế.
+    
+    Chi tiết quá trình hiện thực cơ chế \textit{gesture fallback} sẽ được trình bày tại Mục~5.4.
+    
+    \section{Yêu cầu hệ thống}
+
+    \begin{table}[H]
+    \centering
+    \caption{Yêu cầu phi chức năng hệ thống}
+    \label{tab:non_functional_requirements}
+    \renewcommand{\arraystretch}{1.4}
+    
+    \begin{tabular}{|p{4cm}|p{5cm}|p{5cm}|}
+    \hline
+    \textbf{Tiêu chí} & \textbf{Yêu cầu} & \textbf{Lý do} \\
+    \hline
+    
+    Inference latency 
+    & $< 20$~ms / phiên 
+    & Không ảnh hưởng trải nghiệm người dùng \\
+    \hline
+    
+    Model size 
+    & $< 500$~KB sau quantization 
+    & Phù hợp thiết bị tầm trung \\
+    \hline
+    
+    Tiêu thụ pin 
+    & $< 5\%$ pin / giờ khi thu nền 
+    & \textit{Foreground Service} + event-triggered \\
+    \hline
+    
+    Độ trễ gesture 
+    & $< 3$ giây nhận diện lắc 
+    & Trải nghiệm fallback tự nhiên \\
+    \hline
+    
+    Phiên bản Android 
+    & Tối thiểu Android 10 (API 29) 
+    & API \textit{SensorManager} và \textit{FileProvider} ổn định \\
+    \hline
+    
+    Phần cứng bắt buộc 
+    & Accelerometer + Gyroscope 
+    & Có sẵn trên hầu hết thiết bị Android \\
+    \hline
+    
+    Phần cứng tùy chọn 
+    & Magnetometer 
+    & Cải thiện độ chính xác nhận diện hướng \\
+    \hline
+    
+    \end{tabular}
+    \end{table}
+    
+\end{document}

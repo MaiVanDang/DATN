@@ -1,0 +1,18 @@
+=== FINAL REPORT v4 — Active Authentication Pipeline ===
+
+Users : ['user1', 'user10', 'user12', 'user13', 'user14', 'user15', 'user16', 'user18', 'user19', 'user2', 'user20', 'user21', 'user22', 'user23', 'user24', 'user25', 'user3', 'user4', 'user5', 'user6', 'user7', 'user8', 'user9']
+Runs  : 10
+User-runs cần retry: 3 / 230
+Vẫn catastrophic: 1
+
+Overall mean ± std:
+  AUC fusion : 0.9970 ± 0.0096
+  EER fusion : 0.0104 ± 0.0198
+  FAR @ EER  : 0.0104
+  FRR @ EER  : 0.0106
+
+Overall MEDIAN (robust):
+  AUC fusion : 1.0000
+  EER fusion : 0.0017
+  FAR @ EER  : 0.0017
+  FRR @ EER  : 0.0019
