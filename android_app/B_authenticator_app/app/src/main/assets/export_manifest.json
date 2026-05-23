@@ -18,7 +18,7 @@
   "anchor_count": 6,
   "sigmoid_scale": 8.0,
   "sigmoid_bias": 0.3,
-  "source_checkpoint": "Active_Auth_v5 — 23 users, EER median 0.03%",
-  "exported_at": "2026-05-19T09:00:00Z",
-  "export_pipeline_version": "v5-keras-tflite"
+  "source_checkpoint": "Active_Auth_v4 BackboneCNN — 23 users, AUC 0.9970, EER 1.04%",
+  "exported_at": "2026-05-23T09:37:00Z",
+  "export_pipeline_version": "v4-cnn-keras-tflite"
 }
