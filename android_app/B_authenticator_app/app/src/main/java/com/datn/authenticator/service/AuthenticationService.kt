@@ -7,6 +7,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ServiceInfo
 import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.hardware.TriggerEvent
@@ -14,15 +15,16 @@ import android.hardware.TriggerEventListener
 import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
+import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.datn.authenticator.AuthenticatorApp
 import com.datn.authenticator.fallback.FallbackActivity
 import com.datn.authenticator.inference.InferenceEngine
-import com.datn.authenticator.ui.QuizActivity
 import com.datn.authenticator.inference.ScoreAggregator
 import com.datn.authenticator.inference.SensorWindowCollector
 import com.datn.authenticator.inference.TouchCollector
 import com.datn.authenticator.model.AuthState
+import com.datn.authenticator.ui.QuizActivity
 import com.datn.authenticator.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,26 +38,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/**
- * AuthenticationService is the running heart of BioAuth Authenticator (per Mục 5.3.1).
- *
- * It owns the lifecycle of:
- *   - the SensorWindowCollector (event-triggered, see Mục 5.3.2)
- *   - the InferenceEngine (TFLite, Mục 5.5)
- *   - the ScoreAggregator (5-window EMA, Mục 5.3.3)
- *
- * Triggers a sensor capture session when EITHER:
- *   - the screen turns on (Intent.ACTION_SCREEN_ON), or
- *   - the OS reports significant motion (TriggerEvent on TYPE_SIGNIFICANT_MOTION).
- *
- * Cooldown: 5 seconds between consecutive captures (Mục 5.3.2) so we don't
- * burn battery while the user is actively walking.
- *
- * Exposes [state] as a Kotlin StateFlow so QuizActivity can observe and re-render.
- * The Service also fires FallbackActivity directly when the state transitions to UNKNOWN.
- */
 class AuthenticationService : Service() {
-
     private val serviceJob = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.Default + serviceJob)
     private var captureLoopJob: Job? = null
@@ -71,7 +54,7 @@ class AuthenticationService : Service() {
         override fun onTrigger(event: TriggerEvent?) {
             Log.d(TAG, "Significant motion -> request capture")
             requestCapture("significant_motion")
-            // Trigger sensors must be re-registered after each fire
+
             significantMotionSensor?.let { sensorManager.requestTriggerSensor(this, it) }
         }
     }
@@ -88,13 +71,10 @@ class AuthenticationService : Service() {
     @Volatile private var lastCaptureElapsedMs: Long = 0L
     @Volatile private var pendingCaptureReason: String? = null
 
-    // WARNING countdown: nếu không hồi phục về TRUSTED trong 15s → fallback
     private var warningTimerJob: Job? = null
 
-    // Grace period sau khi FallbackActivity vừa được launch — tránh spam popup
     @Volatile private var fallbackGraceUntilMs: Long = 0L
 
-    // Blocked sau 3 lần fail shake — chờ user mở PIN hệ thống
     @Volatile private var fallbackBlocked: Boolean = false
 
     internal val _state = MutableStateFlow(AuthState.TRUSTED)
@@ -106,16 +86,15 @@ class AuthenticationService : Service() {
         super.onCreate()
         Log.i(TAG, "AuthenticationService onCreate")
 
-        // 1) Promote to foreground IMMEDIATELY (Android 14 requires <5 s)
-        startForeground(NotificationHelper.NOTIFICATION_ID_SERVICE, buildNotification(AuthState.TRUSTED, 0.5f))
+        TouchCollector.resetSession()
 
-        // 2) Wire up sensor / inference subsystem
+        promoteToForeground(AuthState.TRUSTED, 0.5f)
+
         collector = SensorWindowCollector(this)
-        inferenceEngine = InferenceEngine.load(this, useGpu = true)
+        inferenceEngine = InferenceEngine.load(this)
         touchScaler = InferenceEngine.loadTouchScaler(this)
         Log.i(TAG, "InferenceEngine ready: backend=${inferenceEngine?.backend}, mock=${inferenceEngine?.isMockMode}, touchScaler=${touchScaler != null}")
 
-        // 3) Hook event triggers
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         significantMotionSensor = sensorManager.getDefaultSensor(Sensor.TYPE_SIGNIFICANT_MOTION)
         significantMotionSensor?.let {
@@ -127,17 +106,14 @@ class AuthenticationService : Service() {
             this, screenOnReceiver, IntentFilter(Intent.ACTION_SCREEN_ON), ContextCompat.RECEIVER_NOT_EXPORTED
         )
 
-        // 4) Start the capture loop
         captureLoopJob = scope.launch { runCaptureLoop() }
 
-        // 5) Bootstrap: do one immediate capture so the demo doesn't sit idle
         requestCapture("startup")
 
-        // 6) Periodic capture for demo — every 4s so UI score updates regularly
         scope.launch {
             while (true) {
-                delay(4_000L)
-                requestCapture("periodic-demo")
+                delay(PERIODIC_CAPTURE_INTERVAL_MS)
+                requestCapture("periodic")
             }
         }
 
@@ -145,8 +121,27 @@ class AuthenticationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Service is sticky — the OS may restart us if memory is reclaimed
+        promoteToForeground(_state.value, _score.value)
         return START_STICKY
+    }
+
+    override fun onTimeout(startId: Int) {
+        Log.w(TAG, "Foreground service timeout reached (dataSync 6h cap) — stopping self")
+        stopSelf()
+    }
+
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        Log.w(TAG, "Foreground service timeout reached (type=$fgsType) — stopping self")
+        stopSelf()
+    }
+
+    private fun promoteToForeground(state: AuthState, score: Float) {
+        ServiceCompat.startForeground(
+            this,
+            NotificationHelper.NOTIFICATION_ID_SERVICE,
+            buildNotification(state, score),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+        )
     }
 
     override fun onDestroy() {
@@ -156,8 +151,8 @@ class AuthenticationService : Service() {
         warningTimerJob?.cancel()
         captureLoopJob?.cancel()
         scope.cancel()
-        collector.shutdown()
-        inferenceEngine?.close()
+        try { if (::collector.isInitialized) collector.shutdown() } catch (_: Exception) {}
+        try { inferenceEngine?.close() } catch (_: Exception) {}
         instance = null
         super.onDestroy()
     }
@@ -173,12 +168,6 @@ class AuthenticationService : Service() {
         pendingCaptureReason = reason
     }
 
-    /**
-     * The capture loop polls a `pendingCaptureReason` flag every 250 ms.
-     * When set, it kicks off one window capture + inference, updates score,
-     * and may launch FallbackActivity. The polling approach keeps the loop
-     * simple and lets ScreenOn/SignificantMotion be lock-free producers.
-     */
     private suspend fun runCaptureLoop() {
         while (true) {
             val reason = pendingCaptureReason
@@ -189,7 +178,6 @@ class AuthenticationService : Service() {
             pendingCaptureReason = null
             lastCaptureElapsedMs = SystemClock.elapsedRealtime()
 
-            // Capture one 2 s window
             val window = withTimeoutOrNull(SensorWindowCollector.TIMEOUT_MS + 1000L) {
                 collector.collectOneWindow()
             }
@@ -202,7 +190,6 @@ class AuthenticationService : Service() {
 
             val touchVec = TouchCollector.buildFeatureVector()
 
-            // Use RF + touch fusion if RF is trained; otherwise cosine fallback
             val fused = engine.predictFused(window, touchVec, touchScaler)
             val result = fused.inertial
             val scoreToAggregate = fused.fusedScore
@@ -220,20 +207,26 @@ class AuthenticationService : Service() {
             _state.value = newState
             updateNotification(newState, newScore)
 
+            if (newState == AuthState.TRUSTED) {
+                inferenceEngine?.adaptiveBuffer()?.maybeAdd(
+                    embed = result.embedding,
+                    fusedScore = result.probabilityLegitimate,
+                )
+            }
+
             when (newState) {
                 AuthState.TRUSTED -> {
-                    // Hồi phục → huỷ countdown WARNING nếu đang chạy
                     warningTimerJob?.cancel()
                     warningTimerJob = null
                 }
                 AuthState.WARNING -> {
-                    // Chỉ bắt đầu đếm ngược nếu chưa có timer đang chạy
                     if (warningTimerJob == null || !warningTimerJob!!.isActive) {
                         Log.i(TAG, "WARNING — bắt đầu đếm ngược ${WARNING_TIMEOUT_MS / 1000}s")
                         warningTimerJob = scope.launch {
                             delay(WARNING_TIMEOUT_MS)
                             if (_state.value != AuthState.TRUSTED) {
                                 Log.i(TAG, "WARNING timeout — launching fallback")
+                                inferenceEngine?.adaptiveBuffer()?.onFallbackTriggered()
                                 launchFallbackActivity()
                             }
                             warningTimerJob = null
@@ -241,11 +234,11 @@ class AuthenticationService : Service() {
                     }
                 }
                 AuthState.UNKNOWN -> {
-                    // UNKNOWN: huỷ timer WARNING (tránh double-launch) + kích hoạt ngay
                     warningTimerJob?.cancel()
                     warningTimerJob = null
                     if (previousState != AuthState.UNKNOWN) {
                         Log.i(TAG, "UNKNOWN — launching fallback immediately")
+                        inferenceEngine?.adaptiveBuffer()?.onFallbackTriggered()
                         launchFallbackActivity()
                     }
                 }
@@ -307,13 +300,12 @@ class AuthenticationService : Service() {
         }
     }
 
-    /** Gọi từ FallbackActivity khi shake xác thực thành công. */
     fun onFallbackVerified() {
         fallbackBlocked = false
         fallbackGraceUntilMs = SystemClock.elapsedRealtime() + FALLBACK_GRACE_MS
         warningTimerJob?.cancel(); warningTimerJob = null
         aggregator.reset()
-        // Push score cao để state chuyển ngay về TRUSTED
+
         val highScore = aggregator.push(1.0f)
         _score.value = highScore
         _state.value = aggregator.currentState()
@@ -321,7 +313,6 @@ class AuthenticationService : Service() {
         Log.i(TAG, "onFallbackVerified — score reset, state=${_state.value}")
     }
 
-    /** Gọi từ FallbackActivity khi đã hết 3 lần thử — chờ PIN hệ thống. */
     fun onFallbackMaxFailed() {
         fallbackBlocked = true
         Log.i(TAG, "onFallbackMaxFailed — fallback blocked until PIN unlocks")
@@ -332,25 +323,21 @@ class AuthenticationService : Service() {
     companion object {
         private const val TAG = "${AuthenticatorApp.TAG}/Service"
 
-        // Demo: capture every COOLDOWN_MS instead of waiting on motion events,
-        // so the score visibly evolves during a 60-second hội đồng demo.
-        // In production this would be 5_000L per Mục 5.3.2.
         private const val COOLDOWN_MS = 5_000L
         private const val POLL_INTERVAL_MS = 250L
+        private const val PERIODIC_CAPTURE_INTERVAL_MS = 4_000L
         private const val WARNING_TIMEOUT_MS = 15_000L
-        private const val FALLBACK_GRACE_MS = 30_000L  // tránh re-trigger 30s sau khi launch
+        private const val FALLBACK_GRACE_MS = 30_000L
 
         @Volatile
         var instance: AuthenticationService? = null
             internal set
 
-        /** Whether the service is currently running in this process. */
         fun isRunning(): Boolean = instance != null
 
         fun currentScore(): Float? = instance?._score?.value
         fun currentState(): AuthState? = instance?._state?.value
 
-        /** Convenience accessor for UI to observe state without binding. */
         fun observeState(): StateFlow<AuthState>? = instance?.state
         fun observeScore(): StateFlow<Float>? = instance?.score
 

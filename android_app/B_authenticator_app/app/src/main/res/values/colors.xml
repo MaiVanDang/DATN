@@ -8,7 +8,7 @@
     <color name="text_secondary">#FF666666</color>
     <color name="divider">#FFCCCCCC</color>
 
-    <!-- State colors per Mục 5.3.4 -->
+    <!-- State colors: trusted / warning / unknown -->
     <color name="state_trusted">#FF2E7D32</color>   <!-- green -->
     <color name="state_warning">#FFF57C00</color>   <!-- orange -->
     <color name="state_unknown">#FFC62828</color>   <!-- red -->

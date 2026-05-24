@@ -1,16 +1,9 @@
 package com.datn.authenticator.model
 
 import android.content.Context
+import android.util.Log
 import org.json.JSONObject
 
-/**
- * Reads `export_manifest.json` produced by `A_export_pipeline/export_to_tflite.py`.
- *
- * The manifest is loaded once at app start and used to:
- *   - verify the right model is in assets (owner_id matches user setting),
- *   - get the EER threshold from training (used for the binary cutoff),
- *   - confirm input/output shape so InferenceEngine can fail fast on mismatch.
- */
 data class ExportManifest(
     val ownerId: String,
     val modelFile: String,
@@ -53,7 +46,7 @@ data class ExportManifest(
                     pipelineVersion = root.optString("export_pipeline_version", "unknown"),
                 )
             } catch (e: Exception) {
-                android.util.Log.w("ExportManifest", "Cannot load $assetPath: ${e.message}")
+                Log.w("ExportManifest", "Cannot load $assetPath: ${e.message}")
                 null
             }
         }

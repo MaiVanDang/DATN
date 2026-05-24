@@ -1,7 +1,7 @@
 package com.datn.authenticator.inference
 
+import android.os.SystemClock
 import android.view.MotionEvent
-import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -9,51 +9,22 @@ import kotlin.math.ln
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/**
- * Singleton touch event collector + 48-D feature extractor.
- *
- * Feature schema (identical to touch_features.py in the training pipeline):
- *   TAP    (16): tap_n, hold_mean/std/median/p25/p75,
- *                tap_displacement_mean/std/median/p25/p75,
- *                tap_iti_mean/std/median/p25/p75
- *   SCROLL (23): scroll_n, duration_mean/std, trajectory_mean/std,
- *                straight_dist_mean/std, v_mean_mean/std, v_max_mean/std,
- *                v_last5_mean/std, mrl_mean/std, a_first5_mean/std,
- *                dir_circmean, dir_circstd,
- *                frac_up, frac_down, frac_left, frac_right
- *   KEY     (9): key_n, inter_mean/std/median/p25/p75,
- *                delete_rate, typing_speed_per_sec, burst_rate
- *
- * Usage:
- *   // In any Activity:
- *   override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
- *       TouchCollector.onTouchEvent(ev)
- *       return super.dispatchTouchEvent(ev)
- *   }
- *
- *   // Register a TextWatcher on any EditText for key timing:
- *   editText.addTextChangedListener(TouchCollector.makeKeyWatcher())
- */
 object TouchCollector {
-
     const val FEAT_DIM = 48
 
-    // ── Raw event storage ─────────────────────────────────────────────────
+    /** Events cũ hơn ngưỡng này sẽ bị bỏ qua khi build feature vector. */
+    private const val TOUCH_FRESHNESS_MS = 30_000L
 
     private val taps    = mutableListOf<TapEvent>()
     private val scrolls = mutableListOf<ScrollGesture>()
-    private val keyEvents = mutableListOf<KeyEvent>()   // inter-key timing
+    private val keyEvents = mutableListOf<KeyEvent>()
 
-    // Current gesture being tracked
     private var activeScroll: MutableList<MotionPoint>? = null
     private var downX = 0f; private var downY = 0f; private var downT = 0L
     private var isScrollCandidate = false
 
-    private const val SCROLL_MOVE_THRESHOLD_PX = 10f  // min movement to count as scroll
+    private const val SCROLL_MOVE_THRESHOLD_PX = 10f
 
-    // ── Public API ────────────────────────────────────────────────────────
-
-    /** Feed every MotionEvent from dispatchTouchEvent(). Thread-safe via synchronized. */
     @Synchronized
     fun onTouchEvent(event: MotionEvent) {
         when (event.actionMasked) {
@@ -79,7 +50,6 @@ object TouchCollector {
                         scrolls.add(ScrollGesture(pts.toList()))
                     }
                 } else if (duration > 20 && duration < 2000) {
-                    // Tap: short press, no significant movement
                     taps.add(TapEvent(downT, upT, downX, downY, upX, upY))
                 }
                 activeScroll = null
@@ -88,23 +58,29 @@ object TouchCollector {
         }
     }
 
-    /** Feed key character insertions from a TextWatcher.afterTextChanged(). */
     @Synchronized
     fun onKeyInserted(isDelete: Boolean) {
         keyEvents.add(KeyEvent(System.currentTimeMillis(), isDelete))
     }
 
-    /** Build the 48-D feature vector from accumulated events. Returns null if too few events. */
     @Synchronized
     fun buildFeatureVector(): FloatArray? {
+        // Lọc events trong cửa sổ "tươi" (30s gần nhất).
+        // taps/scrolls dùng MotionEvent.eventTime = SystemClock.uptimeMillis().
+        // keyEvents dùng System.currentTimeMillis() (xem onKeyInserted).
+        val nowUptime = SystemClock.uptimeMillis()
+        val nowWall   = System.currentTimeMillis()
+        val taps      = this.taps.filter      { nowUptime - it.upT                  < TOUCH_FRESHNESS_MS }
+        val scrolls   = this.scrolls.filter   { nowUptime - it.points.last().t      < TOUCH_FRESHNESS_MS }
+        val keyEvents = this.keyEvents.filter { nowWall   - it.t                    < TOUCH_FRESHNESS_MS }
+
         if (taps.size < 3 && scrolls.size < 2 && keyEvents.size < 5) return null
         val v = FloatArray(FEAT_DIM)
         var idx = 0
 
-        // ── TAP features (16) ─────────────────────────────────────────────
         val holdMs = taps.map { (it.upT - it.downT).toDouble() }
         val displacement = taps.map { hypot((it.upX - it.downX).toDouble(), (it.upY - it.downY).toDouble()) }
-        // ITI: time between consecutive DOWN events, valid range 100ms–8000ms
+
         val itiMs = (1 until taps.size)
             .map { (taps[it].downT - taps[it - 1].downT).toDouble() }
             .filter { it in 100.0..8000.0 }
@@ -120,7 +96,6 @@ object TouchCollector {
             v[idx++] = iStats.median.toFloat(); v[idx++] = iStats.p25.toFloat(); v[idx++] = iStats.p75.toFloat()
         } else { idx += 15 }
 
-        // ── SCROLL features (23) ──────────────────────────────────────────
         v[idx++] = scrolls.size.toFloat()
         if (scrolls.isNotEmpty()) {
             val durations   = mutableListOf<Double>()
@@ -131,14 +106,13 @@ object TouchCollector {
             val vLast5s     = mutableListOf<Double>()
             val mrls        = mutableListOf<Double>()
             val aFirst5s    = mutableListOf<Double>()
-            val directions  = mutableListOf<Double>()   // angles in radians
+            val directions  = mutableListOf<Double>()
 
             for (g in scrolls) {
                 val pts = g.points
                 val dur = (pts.last().t - pts.first().t).toDouble().coerceAtLeast(1.0)
                 durations.add(dur)
 
-                // Segment-level velocities
                 val segV = mutableListOf<Double>()
                 var traj = 0.0
                 for (i in 1 until pts.size) {
@@ -146,7 +120,7 @@ object TouchCollector {
                     val dx = pts[i].x - pts[i-1].x; val dy = pts[i].y - pts[i-1].y
                     val dist = hypot(dx.toDouble(), dy.toDouble())
                     traj += dist
-                    segV.add(dist / dt * 1000)   // px/s
+                    segV.add(dist / dt * 1000)
                 }
                 trajectories.add(traj)
                 straightDists.add(hypot((pts.last().x - pts.first().x).toDouble(),
@@ -155,7 +129,6 @@ object TouchCollector {
                 vMaxes.add(segV.maxOrNull() ?: 0.0)
                 vLast5s.add(segV.takeLast(5).average())
 
-                // Acceleration of first 5 segments
                 val first5 = segV.take(5)
                 val aFirst5 = if (first5.size >= 2) {
                     var acc = 0.0
@@ -164,13 +137,11 @@ object TouchCollector {
                 } else 0.0
                 aFirst5s.add(aFirst5)
 
-                // Mean resultant length + circular stats for direction
                 val dx = pts.last().x - pts.first().x
                 val dy = pts.last().y - pts.first().y
-                val angle = atan2(dy.toDouble(), dx.toDouble())  // -PI..PI
+                val angle = atan2(dy.toDouble(), dx.toDouble())
                 directions.add(angle)
 
-                // Per-gesture MRL: use segment angles
                 var sinSum = 0.0; var cosSum = 0.0
                 for (i in 1 until pts.size) {
                     val a = atan2((pts[i].y - pts[i-1].y).toDouble(), (pts[i].x - pts[i-1].x).toDouble())
@@ -180,7 +151,6 @@ object TouchCollector {
                 mrls.add(if (n > 0) sqrt(sinSum*sinSum + cosSum*cosSum) / n else 0.0)
             }
 
-            // Aggregate
             val durS = statsPair(durations); val trajS = statsPair(trajectories)
             val sdS = statsPair(straightDists); val vmS = statsPair(vMeans)
             val vxS = statsPair(vMaxes); val vlS = statsPair(vLast5s)
@@ -195,14 +165,12 @@ object TouchCollector {
             v[idx++] = mrlS.first.toFloat();  v[idx++] = mrlS.second.toFloat()
             v[idx++] = aS.first.toFloat();    v[idx++] = aS.second.toFloat()
 
-            // Circular mean/std of direction
             val sinMean = directions.map { sin(it) }.average()
             val cosMean = directions.map { cos(it) }.average()
-            v[idx++] = atan2(sinMean, cosMean).toFloat()  // circmean
+            v[idx++] = atan2(sinMean, cosMean).toFloat()
             val R = sqrt(sinMean*sinMean + cosMean*cosMean)
-            v[idx++] = if (R < 1.0 && R > 0.0) sqrt(-2.0 * ln(R)).toFloat() else 0f // circstd
+            v[idx++] = if (R < 1.0 && R > 0.0) sqrt(-2.0 * ln(R)).toFloat() else 0f
 
-            // Directional fractions (based on dominant axis of each gesture)
             var up = 0; var down = 0; var left = 0; var right = 0
             for (g in scrolls) {
                 val dx = g.points.last().x - g.points.first().x
@@ -215,7 +183,6 @@ object TouchCollector {
             v[idx++] = left / total; v[idx++] = right / total
         } else { idx += 22 }
 
-        // ── KEYSTROKE features (9) ────────────────────────────────────────
         val allKeys = keyEvents.sortedBy { it.t }
         val interMs = allKeys.zipWithNext { a, b -> (b.t - a.t).toDouble() }
             .filter { it in 20.0..3000.0 }
@@ -237,7 +204,6 @@ object TouchCollector {
         return v
     }
 
-    /** Reset for new session. */
     @Synchronized
     fun resetSession() {
         taps.clear(); scrolls.clear(); keyEvents.clear()
@@ -248,15 +214,11 @@ object TouchCollector {
     fun scrollCount(): Int = scrolls.size
     fun keyCount(): Int = keyEvents.size
 
-    // ── Data classes ──────────────────────────────────────────────────────
-
     private data class TapEvent(val downT: Long, val upT: Long,
         val downX: Float, val downY: Float, val upX: Float, val upY: Float)
     private data class ScrollGesture(val points: List<MotionPoint>)
     private data class MotionPoint(val x: Float, val y: Float, val t: Long)
     private data class KeyEvent(val t: Long, val isDelete: Boolean)
-
-    // ── Statistics helpers ────────────────────────────────────────────────
 
     private data class Stats5(val mean: Double, val std: Double, val median: Double, val p25: Double, val p75: Double)
 
@@ -268,7 +230,6 @@ object TouchCollector {
         return Stats5(mean, std, sorted.percentile(50.0), sorted.percentile(25.0), sorted.percentile(75.0))
     }
 
-    /** Returns (mean, std). */
     private fun statsPair(data: List<Double>): Pair<Double, Double> {
         if (data.isEmpty()) return 0.0 to 0.0
         val m = data.average()

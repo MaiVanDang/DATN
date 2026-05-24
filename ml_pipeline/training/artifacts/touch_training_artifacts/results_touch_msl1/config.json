@@ -1,0 +1,12 @@
+{
+  "n_runs": 10,
+  "context_mode": "all",
+  "pool_size": 100,
+  "n_estimators": 200,
+  "max_features": "sqrt",
+  "class_weight": "balanced",
+  "min_samples_leaf": 1,
+  "test_size": 0.2,
+  "val_size": 0.125,
+  "seed_base": 42
+}

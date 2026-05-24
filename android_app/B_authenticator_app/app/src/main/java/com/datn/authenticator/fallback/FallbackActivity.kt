@@ -10,19 +10,7 @@ import android.widget.TextView
 import com.datn.authenticator.R
 import com.datn.authenticator.service.AuthenticationService
 
-/**
- * Full-screen overlay shown when the AuthenticationService transitions to UNKNOWN.
- *
- * UI flow (Mục 5.4):
- *   1) Show "Người dùng lạ — vui lòng xác thực bằng cử chỉ lắc"
- *   2) User taps "Bắt đầu xác thực" -> ShakeDetector starts (30 s window)
- *   3) Live counter shows current shake count
- *   4) On timeout OR user taps "Hoàn thành":
- *        - If verify() passes -> dismiss, show success toast, reset score state
- *        - Else, increment failed attempts. After 3 failures -> hand off to system PIN.
- */
 class FallbackActivity : Activity() {
-
     private lateinit var titleText: TextView
     private lateinit var statusText: TextView
     private lateinit var counterText: TextView
@@ -38,7 +26,7 @@ class FallbackActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Show on lock screen, keep screen on while user is shaking
+
         window.addFlags(
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
                     WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
@@ -67,16 +55,12 @@ class FallbackActivity : Activity() {
         if (storage.failedAttempts() >= PatternStorage.MAX_FAILED_ATTEMPTS) {
             statusText.text = getString(R.string.fallback_max_failed)
             startButton.isEnabled = false
-            // Per Mục 5.4.2 — hand off to system credentials. Demo: just show notice.
             return
         }
 
         startButton.setOnClickListener { startShakeCapture() }
         doneButton.setOnClickListener { finishShakeCapture(timedOut = false) }
-        cancelButton.setOnClickListener {
-            // User dismissed. We do NOT reset the score — service stays in UNKNOWN.
-            finish()
-        }
+        cancelButton.setOnClickListener { finish() }
         doneButton.isEnabled = false
     }
 
@@ -87,7 +71,6 @@ class FallbackActivity : Activity() {
     }
 
     override fun onBackPressed() {
-        // Block back button while shake is active so user can't accidentally bypass.
         if (!shakingActive) super.onBackPressed()
     }
 
@@ -122,7 +105,7 @@ class FallbackActivity : Activity() {
 
         if (passed) {
             storage.resetFailedAttempts()
-            // Reset aggregator → trạng thái TRUSTED ngay lập tức, không bị re-trigger
+
             AuthenticationService.instance?.onFallbackVerified()
             statusText.text = getString(R.string.fallback_pass, observedCount)
             setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_VERIFIED, true))
@@ -136,13 +119,11 @@ class FallbackActivity : Activity() {
             }
             counterText.text = getString(R.string.fallback_counter, observedCount)
             if (failedCount >= PatternStorage.MAX_FAILED_ATTEMPTS) {
-                // Thông báo service chặn re-trigger — chờ PIN hệ thống
                 AuthenticationService.instance?.onFallbackMaxFailed()
                 statusText.append("\n" + getString(R.string.fallback_max_failed))
                 setResult(Activity.RESULT_CANCELED)
                 finishWithDelay()
             } else {
-                // Allow retry
                 startButton.isEnabled = true
                 doneButton.isEnabled = false
                 cancelButton.isEnabled = true
@@ -151,14 +132,12 @@ class FallbackActivity : Activity() {
     }
 
     private fun finishWithDelay() {
-        // Brief pause so the user sees the result message
         startButton.postDelayed({ if (!isFinishing) finish() }, 1500L)
     }
 
     companion object {
         const val EXTRA_VERIFIED = "verified"
 
-        // Convenience to launch from anywhere
         fun launch(context: android.content.Context) {
             val intent = Intent(context, FallbackActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

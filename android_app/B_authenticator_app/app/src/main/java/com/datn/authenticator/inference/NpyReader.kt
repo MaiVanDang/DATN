@@ -6,22 +6,11 @@ import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/**
- * Minimal .npy reader for 2-D float32 arrays stored in assets.
- *
- * Supports NumPy format v1.0 / v2.0, row-major (C order), dtype '<f4' (float32 LE).
- * Sufficient for loading impostor_pool_inertial.npy and impostor_pool_touch.npy.
- */
 object NpyReader {
-
     private const val TAG = "NpyReader"
     private val MAGIC = byteArrayOf(0x93.toByte(), 'N'.code.toByte(), 'U'.code.toByte(),
         'M'.code.toByte(), 'P'.code.toByte(), 'Y'.code.toByte())
 
-    /**
-     * Read a 2-D float32 .npy from assets.
-     * Returns Array<FloatArray> where result[row][col].
-     */
     fun readFloat32_2D(context: Context, assetPath: String): Array<FloatArray> {
         context.assets.open(assetPath).use { stream ->
             return parseStream(stream, assetPath)
@@ -29,16 +18,14 @@ object NpyReader {
     }
 
     private fun parseStream(stream: InputStream, name: String): Array<FloatArray> {
-        // Verify magic
         val magic = ByteArray(6)
         check(stream.read(magic) == 6 && magic.contentEquals(MAGIC)) {
             "$name: not a valid .npy file"
         }
 
         val major = stream.read()
-        stream.read() // minor (ignored)
+        stream.read()
 
-        // Header length: 2 bytes LE for v1, 4 bytes LE for v2
         val headerLen = if (major == 1) {
             val lo = stream.read()
             val hi = stream.read()
@@ -77,7 +64,6 @@ object NpyReader {
         }
     }
 
-    /** Parse shape from numpy dict header string, e.g. "'shape': (100, 128)," */
     private fun parseShape(header: String): List<Int> {
         val m = Regex("""'shape'\s*:\s*\(([^)]*)\)""").find(header)
             ?: error("Cannot parse shape from header: $header")

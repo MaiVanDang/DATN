@@ -1,0 +1,74 @@
+[
+  {
+    "name": "CNN + walking",
+    "arch": "cnn",
+    "mode": "walking",
+    "auc_mean": 1.0,
+    "auc_std": 0.0,
+    "eer_mean": 0.0,
+    "eer_std": 0.0,
+    "model_size_mb": 0.33,
+    "latency_ms": 2.6,
+    "n_owners_eval": 24
+  },
+  {
+    "name": "CNN + all",
+    "arch": "cnn",
+    "mode": "all",
+    "auc_mean": 1.0,
+    "auc_std": 0.0,
+    "eer_mean": 0.0,
+    "eer_std": 0.0,
+    "model_size_mb": 0.33,
+    "latency_ms": 2.8,
+    "n_owners_eval": 24
+  },
+  {
+    "name": "ConvLSTM + walking",
+    "arch": "convlstm",
+    "mode": "walking",
+    "auc_mean": 0.9988,
+    "auc_std": 0.0058,
+    "eer_mean": 0.0018,
+    "eer_std": 0.0087,
+    "model_size_mb": 0.66,
+    "latency_ms": 8.9,
+    "n_owners_eval": 24
+  },
+  {
+    "name": "ConvLSTM + all",
+    "arch": "convlstm",
+    "mode": "all",
+    "auc_mean": 1.0,
+    "auc_std": 0.0,
+    "eer_mean": 0.0,
+    "eer_std": 0.0,
+    "model_size_mb": 0.66,
+    "latency_ms": 7.3,
+    "n_owners_eval": 24
+  },
+  {
+    "name": "ConvLSTM-Bi + walking",
+    "arch": "convlstm_bi",
+    "mode": "walking",
+    "auc_mean": 1.0,
+    "auc_std": 0.0,
+    "eer_mean": 0.0,
+    "eer_std": 0.0,
+    "model_size_mb": 0.53,
+    "latency_ms": 10.1,
+    "n_owners_eval": 24
+  },
+  {
+    "name": "ConvLSTM-Bi + all",
+    "arch": "convlstm_bi",
+    "mode": "all",
+    "auc_mean": 1.0,
+    "auc_std": 0.0,
+    "eer_mean": 0.0,
+    "eer_std": 0.0,
+    "model_size_mb": 0.53,
+    "latency_ms": 9.6,
+    "n_owners_eval": 24
+  }
+]

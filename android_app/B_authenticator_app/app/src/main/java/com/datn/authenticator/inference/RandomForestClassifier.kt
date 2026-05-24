@@ -5,38 +5,16 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.InputStream
 import java.io.OutputStream
-import kotlin.math.ln
 import kotlin.math.sqrt
 
-/**
- * Binary Random Forest classifier — CART trees, Gini impurity.
- *
- * Mirrors the sklearn hyperparameters used in verifier.py:
- *   n_estimators  = 200
- *   max_features  = "sqrt"   → floor(sqrt(n_features))
- *   class_weight  = "balanced" → handled by class-frequency weighting in Gini
- *   min_samples_leaf = 2 (inertial) or 1 (touch) — caller sets this
- *
- * Training input:
- *   X : Array<FloatArray>   — feature matrix (n_samples × n_features)
- *   y : IntArray            — binary labels {0, 1}
- *
- * Inference:
- *   predictProba(x: FloatArray): Float  — P(class=1)
- *
- * Serialization: compact binary (magic + n_trees + per-tree node arrays).
- */
 class RandomForestClassifier(
     private val nEstimators: Int = 200,
     private val minSamplesLeaf: Int = 2,
     private val seed: Long = 42L,
 ) {
-
     private val trees = mutableListOf<DecisionTree>()
     var isTrained: Boolean = false
         private set
-
-    // ── Training ──────────────────────────────────────────────────────────
 
     fun fit(X: Array<FloatArray>, y: IntArray) {
         require(X.size == y.size && X.isNotEmpty()) { "X and y must have same non-zero length" }
@@ -46,7 +24,6 @@ class RandomForestClassifier(
         val nFeatures = X[0].size
         val maxFeatures = maxOf(1, sqrt(nFeatures.toDouble()).toInt())
 
-        // Class weights for balanced mode
         val n1 = y.count { it == 1 }
         val n0 = nSamples - n1
         val w1 = if (n1 > 0) nSamples.toDouble() / (2 * n1) else 1.0
@@ -55,7 +32,7 @@ class RandomForestClassifier(
 
         val rng = java.util.Random(seed)
         repeat(nEstimators) { treeIdx ->
-            // Bootstrap: sample nSamples indices with replacement
+
             val indices = IntArray(nSamples) { rng.nextInt(nSamples) }
             val tree = DecisionTree(maxFeatures, minSamplesLeaf, rng.nextLong())
             tree.build(X, y, weights, indices)
@@ -65,15 +42,12 @@ class RandomForestClassifier(
         Log.i(TAG, "RF trained: $nEstimators trees, n=$nSamples, features=$nFeatures")
     }
 
-    /** P(y=1) averaged over all trees. */
     fun predictProba(x: FloatArray): Float {
         if (trees.isEmpty()) return 0.5f
         var sum = 0f
         for (t in trees) sum += t.predictProba(x)
         return sum / trees.size
     }
-
-    // ── Serialization ─────────────────────────────────────────────────────
 
     fun writeTo(out: OutputStream) {
         DataOutputStream(out).use { dos ->
@@ -103,25 +77,21 @@ class RandomForestClassifier(
         const val MAGIC = 0xBF0001.toInt()
     }
 
-    // ── Decision tree ─────────────────────────────────────────────────────
-
     internal class DecisionTree(
         private val maxFeatures: Int,
         private val minSamplesLeaf: Int,
         seed: Long,
     ) {
-        // Compact node storage (arrays of parallel arrays for cache efficiency)
-        private var feature    = IntArray(0)   // split feature index (-1 = leaf)
-        private var threshold  = FloatArray(0) // split threshold
-        private var leftChild  = IntArray(0)   // index of left child
-        private var rightChild = IntArray(0)   // index of right child
-        private var leafProba  = FloatArray(0) // P(y=1) at leaf nodes
+        private var feature    = IntArray(0)
+        private var threshold  = FloatArray(0)
+        private var leftChild  = IntArray(0)
+        private var rightChild = IntArray(0)
+        private var leafProba  = FloatArray(0)
 
         private val rng = java.util.Random(seed)
         private var nodeCount = 0
 
         fun build(X: Array<FloatArray>, y: IntArray, weights: FloatArray, indices: IntArray) {
-            // Pre-allocate a generous node buffer (2 × samples is sufficient for balanced trees)
             val maxNodes = 2 * indices.size + 1
             feature    = IntArray(maxNodes) { -1 }
             threshold  = FloatArray(maxNodes)
@@ -132,7 +102,6 @@ class RandomForestClassifier(
 
             buildNode(X, y, weights, indices.toMutableList(), depth = 0)
 
-            // Trim to actual size
             feature    = feature.copyOf(nodeCount)
             threshold  = threshold.copyOf(nodeCount)
             leftChild  = leftChild.copyOf(nodeCount)
@@ -151,14 +120,12 @@ class RandomForestClassifier(
             val wTotal = w1 + w0
             val proba = if (wTotal > 0) (w1 / wTotal).toFloat() else 0.5f
 
-            // Leaf conditions: too small, pure, or max depth
             if (indices.size < 2 * minSamplesLeaf || w1 == 0.0 || w0 == 0.0 || depth >= MAX_DEPTH) {
                 feature[nodeIdx] = -1
                 leafProba[nodeIdx] = proba
                 return nodeIdx
             }
 
-            // Find best split among random subset of features
             val nFeatures = X[0].size
             val featSubset = (0 until nFeatures).shuffled(rng).take(maxFeatures)
 
@@ -167,9 +134,8 @@ class RandomForestClassifier(
             var bestGini = Double.MAX_VALUE
 
             for (f in featSubset) {
-                // Collect values and sort
                 val vals = indices.map { X[it][f] }.toFloatArray().also { it.sort() }
-                // Try midpoints between consecutive distinct values
+
                 var prevVal = vals[0]
                 for (k in 1 until vals.size) {
                     val v = vals[k]

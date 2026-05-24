@@ -1,12 +1,13 @@
 """
-models.py — Backbone architectures cho training pipeline
+models.py — Backbone architectures cho verification demo.
 
-Hai kiến trúc có sẵn, interface giống nhau:
-  BackboneCNN      : Conv1D × 3 + AvgPool  (baseline)
-  BackboneConvLSTM : Conv1D × 2 + LSTM     (cải tiến temporal)
+Ba kiến trúc với cùng interface:
+  BackboneCNN      : Conv1D × 3 + AvgPool
+  BackboneConvLSTM : Conv1D × 2 + LSTM   (uni-directional)
+  BackboneConvLSTM : Conv1D × 2 + BiLSTM (bidirectional)
 
-Input:  (batch, 9 channels, 100 timesteps)
-Output: (batch, 128) embedding  — giữ nguyên cho cả hai
+Input:  (batch, 9 channels, T timesteps)
+Output: (batch, 128) embedding
 """
 import torch
 import torch.nn as nn
@@ -14,12 +15,10 @@ import torch.nn as nn
 
 EMBED_DIM  = 128
 N_CHANNELS = 9
-WINDOW_LEN = 100
 
-
-# ── Kiến trúc 1: CNN thuần (baseline) ──────────────────────────────────
 
 class BackboneCNN(nn.Module):
+    """CNN thuần — 3 lớp Conv1D + adaptive average pooling."""
 
     def __init__(self, n_users: int, n_channels: int = N_CHANNELS,
                  embed_dim: int = EMBED_DIM, dropout: float = 0.4):
@@ -50,19 +49,17 @@ class BackboneCNN(nn.Module):
         return logits, emb
 
 
-# ── Kiến trúc 2: Conv + LSTM (DeepConvLSTM-style) ──────────────────────
-
 class _ConvLSTMEncoder(nn.Module):
-    """Conv × 2 giảm sequence 100→25, LSTM học temporal dependencies dài hạn.
+    """Conv × 2 giảm sequence, LSTM học temporal dependencies dài hạn.
 
-    Flow: (B,9,100) → conv → (B,128,25) → transpose → (B,25,128)
-          → LSTM → last hidden → (B,embed_dim)
+    Flow: (B, 9, T) → conv → (B, 128, T/4) → transpose → (B, T/4, 128)
+          → LSTM → last hidden → (B, embed_dim)
     """
 
     def __init__(self, n_channels: int, embed_dim: int,
                  dropout: float, bidirectional: bool):
         super().__init__()
-        # Với BiLSTM: mỗi chiều hidden_size = embed_dim//2 → concat = embed_dim
+        # BiLSTM: mỗi chiều hidden_size = embed_dim//2 → concat = embed_dim
         lstm_hidden = embed_dim // 2 if bidirectional else embed_dim
 
         self.conv = nn.Sequential(
@@ -86,18 +83,18 @@ class _ConvLSTMEncoder(nn.Module):
         self.drop = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.conv(x)            # (B, 128, 25)
-        x = x.permute(0, 2, 1)     # (B, 25, 128)
-        _, (h, _) = self.lstm(x)   # h: (D, B, hidden)  D=1 uni / D=2 bi
-        if h.shape[0] > 1:         # bidirectional → cat forward + backward
+        x = self.conv(x)
+        x = x.permute(0, 2, 1)
+        _, (h, _) = self.lstm(x)
+        if h.shape[0] > 1:          # bidirectional → concat forward + backward
             h = torch.cat([h[0], h[1]], dim=-1)
         else:
             h = h.squeeze(0)
-        return self.drop(h)         # (B, embed_dim)
+        return self.drop(h)
 
 
 class BackboneConvLSTM(nn.Module):
-    """Conv1D × 2 + LSTM — học tốt hơn pattern tuần tự dài hạn (gait cycle).
+    """Conv1D × 2 + LSTM (uni hoặc bi).
 
     Cùng interface với BackboneCNN: forward() trả (logits, embedding).
     """
@@ -115,8 +112,6 @@ class BackboneConvLSTM(nn.Module):
         return logits, emb
 
 
-# ── Lookup helper ───────────────────────────────────────────────────────
-
 BACKBONE_REGISTRY = {
     'cnn':         BackboneCNN,
     'convlstm':    BackboneConvLSTM,
@@ -131,8 +126,6 @@ def build_backbone(arch: str, n_users: int, **kwargs) -> nn.Module:
     return BACKBONE_REGISTRY[arch](n_users=n_users, **kwargs)
 
 
-# ── Load checkpoint ─────────────────────────────────────────────────────
-
 def load_encoder(checkpoint_path: str, n_users: int = 19,
                  arch: str = 'cnn') -> nn.Module:
     """Load checkpoint và trả về encoder-only (không có classifier head).
@@ -142,11 +135,9 @@ def load_encoder(checkpoint_path: str, n_users: int = 19,
     model = build_backbone(arch, n_users=n_users)
     state = torch.load(checkpoint_path, map_location='cpu', weights_only=True)
 
+    # Nếu classifier shape không khớp (n_users khác lúc train) → drop classifier
     ckpt_cls = state.get('classifier.weight')
     if ckpt_cls is not None and ckpt_cls.shape[0] != n_users:
-        print(f"[load_encoder] classifier shape mismatch "
-              f"(ckpt={ckpt_cls.shape[0]}, current={n_users}); "
-              f"dropping classifier weights.")
         state = {k: v for k, v in state.items() if not k.startswith('classifier')}
 
     model.load_state_dict(state, strict=False)

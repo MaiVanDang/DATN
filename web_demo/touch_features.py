@@ -1,8 +1,6 @@
 """
 touch_features.py — Trích vector 48-D từ touch_session_features.csv
 
-ĐÃ ĐỒNG BỘ với step2_preprocess.py (48 features).
-
 Schema 48-D:
     TAP    (16): tap_n, tap_hold×5, tap_disp×5, tap_iti×5
     SCROLL (23): scroll_n, dur×2, traj×2, sdist×2, vmean×2, vmax×2,
@@ -10,10 +8,9 @@ Schema 48-D:
     KEY     (9): key_n, key_inter×5, key_delete_rate, key_typing_speed,
                  key_burst_rate
 
-Yêu cầu data format:
+Data format:
     processed_data/userX/touch_session_features.csv
         - 1 row per session, 48 feature columns + session_id column
-        - File này được tạo bởi step2_preprocess.py
 
 Nếu user folder không có touch_session_features.csv → build_session_features()
 trả None. Verifier sẽ tự fallback sang pure-inertial.
@@ -23,10 +20,7 @@ import pandas as pd
 from pathlib import Path
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# Schema 48-D (KHỚP 100% với step2_preprocess.py)
-# Thứ tự CỐ ĐỊNH — thay đổi ở đây là breaking change cho model.
-# ═══════════════════════════════════════════════════════════════════════
+# Thứ tự CỐ ĐỊNH — thay đổi ở đây là breaking change cho model đã train.
 
 TAP_COLS = [
     "tap_n",
@@ -61,15 +55,11 @@ FEAT_DIM     = len(FEATURE_COLS)   # 48
 assert FEAT_DIM == 48, f"FEAT_DIM phải = 48, hiện = {FEAT_DIM}"
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# Cache CSV per user
-# ══════════════════════════════════
-
+# Cache CSV per user-folder
 _session_csv_cache: dict = {}
 
 
 def _load_session_csv(user_dir: Path):
-    """Load touch_session_features.csv, cache theo path."""
     user_dir = Path(user_dir)
     if user_dir in _session_csv_cache:
         return _session_csv_cache[user_dir]
@@ -90,7 +80,7 @@ def _load_session_csv(user_dir: Path):
         _session_csv_cache[user_dir] = None
         return None
 
-    # Bổ sung 0.0 cho cột thiếu (backward-compat)
+    # Bổ sung 0.0 cho cột thiếu
     missing = [c for c in FEATURE_COLS if c not in df.columns]
     if missing:
         print(f"  ⚠ {user_dir.name}: thiếu {len(missing)} cột "
@@ -114,13 +104,9 @@ def strip_user_prefix(prefixed_session: str, user_id: str) -> str:
     return prefixed_session
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# Main API
-# ═══════════════════════════════════════════════════════════════════════
-
 def build_session_features(user_dir, session_ids):
-    """
-    Trích vector 48-D trung bình cho tập session_ids của 1 user.
+    """Trích vector 48-D trung bình cho tập session_ids của 1 user.
+
     Trả None nếu user không có touch data hoặc không match session_ids.
     """
     df = _load_session_csv(user_dir)

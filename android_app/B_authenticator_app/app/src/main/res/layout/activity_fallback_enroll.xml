@@ -14,33 +14,26 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Đăng ký mẫu lắc xác thực"
+            android:text="Đăng ký mẫu lắc cá nhân"
             android:textSize="24sp"
             android:textStyle="bold"
             android:layout_marginBottom="12dp" />
 
+        <ProgressBar
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="16dp"
+            android:layout_marginBottom="8dp"
+            android:max="3"
+            android:progress="0" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Chọn một số bí mật (1–9). Lắc điện thoại đúng số lần đó. Hệ thống sẽ ghi nhận 3 lần thử và lấy trung vị."
+            android:text="App sẽ học cách bạn lắc điện thoại để dùng làm xác thực dự phòng. Hãy lắc theo nhịp tự nhiên của bạn (không cần đếm số lần cụ thể). Lặp lại 3 lần."
             android:textSize="14sp"
             android:textColor="@color/text_secondary"
             android:lineSpacingMultiplier="1.4"
-            android:layout_marginBottom="28dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Số bí mật của bạn:"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
-
-        <NumberPicker
-            android:id="@+id/feNumberPicker"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
             android:layout_marginBottom="28dp" />
 
         <ProgressBar
@@ -59,7 +52,7 @@
             android:textSize="15sp"
             android:gravity="center"
             android:layout_marginBottom="16dp"
-            android:text="Bấm nút bên dưới để bắt đầu lắc (10 giây mỗi lần)" />
+            android:text="Bấm 'Bắt đầu lắc', lắc theo nhịp tự nhiên của bạn, rồi bấm 'Xong lắc'." />
 
         <TextView
             android:id="@+id/feCounter"

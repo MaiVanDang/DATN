@@ -4,8 +4,9 @@ Export BackboneCNN: PyTorch checkpoint -> TFLite (NWC format)
 Run from repo root (f:/DATN):
     python ml_pipeline/export/export_tflite_cnn.py
 
-Output:
-    ml_pipeline/training/cnn/models/backbone.tflite
+Source : web_demo/artifacts/cnn_v2/models_walking/backbone.pt
+Output : web_demo/artifacts/cnn_v2/export_walking/backbone.tflite
+         android_app/.../assets/backbone.tflite + pool + scaler
 """
 
 import os, sys
@@ -23,8 +24,10 @@ import torch.nn as nn
 
 # ── Paths ─────────────────────────────────────────────────────────────────
 REPO_ROOT  = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-PT_PATH    = os.path.join(REPO_ROOT, "ml_pipeline", "training", "cnn", "models", "backbone.pt")
-OUT_TFLITE = os.path.join(REPO_ROOT, "ml_pipeline", "training", "cnn", "models", "backbone.tflite")
+V2_DIR     = os.path.join(REPO_ROOT, "web_demo", "artifacts", "cnn_v2")
+PT_PATH    = os.path.join(V2_DIR, "models_walking", "backbone.pt")
+EXPORT_DIR = os.path.join(V2_DIR, "export_walking")
+OUT_TFLITE = os.path.join(EXPORT_DIR, "backbone.tflite")
 ASSETS_DIR = os.path.join(REPO_ROOT, "android_app", "B_authenticator_app", "app", "src", "main", "assets")
 
 # ── 1. BackboneCNN (PyTorch, NCW format) ──────────────────────────────────
@@ -143,13 +146,22 @@ if diff_kt > 1e-4:
 # ── 7. Copy assets to Android app ─────────────────────────────────────────
 import shutil
 
-EXPORT_DIR = os.path.join(REPO_ROOT, "ml_pipeline", "training", "cnn", "export")
 COPY_LIST  = [
     ("backbone.tflite",            OUT_TFLITE),
     ("impostor_pool_inertial.npy", os.path.join(EXPORT_DIR, "impostor_pool_inertial.npy")),
     ("impostor_pool_touch.npy",    os.path.join(EXPORT_DIR, "impostor_pool_touch.npy")),
     ("touch_scaler.json",          os.path.join(EXPORT_DIR, "touch_scaler.json")),
 ]
+
+# ── 8. Update export_manifest.json ────────────────────────────────────────
+import json, datetime
+manifest_path = os.path.join(ASSETS_DIR, "export_manifest.json")
+manifest = json.load(open(manifest_path)) if os.path.exists(manifest_path) else {}
+manifest.update({
+    "source_checkpoint": "cnn_v2 walking — AUC_fusion=0.9965 EER=1.20%",
+    "exported_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "export_pipeline_version": "v4-cnn-keras-tflite",
+})
 
 print(f"\nCopying assets to {ASSETS_DIR}:")
 os.makedirs(ASSETS_DIR, exist_ok=True)
@@ -160,5 +172,9 @@ for dest_name, src in COPY_LIST:
         print(f"  OK   {dest_name}")
     else:
         print(f"  SKIP (not found): {src}")
+
+with open(manifest_path, "w") as f:
+    json.dump(manifest, f, indent=2)
+print(f"  OK   export_manifest.json (updated source_checkpoint)")
 
 print("\n=== Done! Rebuild the app in Android Studio ===")

@@ -3,13 +3,13 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-      Permissions per Bảng 5.1 (BioAuth Authenticator column):
-        - BODY_SENSORS         : accelerometer, gyroscope, magnetometer
-        - FOREGROUND_SERVICE   : run AuthenticationService while user is away
-        - FOREGROUND_SERVICE_DATA_SYNC : Android 14+ subtype
-        - POST_NOTIFICATIONS   : show ongoing TRUSTED/WARNING notification
-        - SYSTEM_ALERT_WINDOW  : overlay FallbackUI on top of other apps
-        - HIGH_SAMPLING_RATE_SENSORS (Android 12+) : ensure 50 Hz available
+      Sensor + foreground-service permissions:
+        BODY_SENSORS                  : accelerometer, gyroscope, magnetometer
+        FOREGROUND_SERVICE            : required for AuthenticationService
+        FOREGROUND_SERVICE_DATA_SYNC  : Android 14+ subtype
+        POST_NOTIFICATIONS            : ongoing status notification (Android 13+)
+        SYSTEM_ALERT_WINDOW           : overlay the fallback UI on top of other apps
+        HIGH_SAMPLING_RATE_SENSORS    : 50 Hz capture on Android 12+
     -->
     <uses-permission android:name="android.permission.BODY_SENSORS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -43,18 +43,30 @@
         android:theme="@style/Theme.BioAuthAuthenticator"
         tools:targetApi="34">
 
-        <!-- Owner biometric enrollment — app entry point; skips to QuizActivity if already enrolled -->
+        <!-- Mode selection — app entry point. Lets user pick "Walking" vs "All-action" before enrolling. -->
         <activity
-            android:name=".ui.OwnerEnrollmentActivity"
+            android:name=".ui.ModeSelectActivity"
             android:exported="true"
-            android:label="@string/enroll_owner_title">
+            android:label="@string/mode_select_title">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- Shake-pattern enrollment — runs between biometric enrollment and quiz -->
+        <!-- Owner biometric enrollment — reached after ModeSelectActivity; skips to QuizActivity if already enrolled -->
+        <activity
+            android:name=".ui.OwnerEnrollmentActivity"
+            android:exported="false"
+            android:label="@string/enroll_owner_title" />
+
+        <!-- Touch behaviour enrollment — guided tap/scroll/keystroke + RF training -->
+        <activity
+            android:name=".ui.TouchEnrollActivity"
+            android:exported="false"
+            android:label="Đăng ký hành vi chạm" />
+
+        <!-- Shake-pattern enrollment — runs between touch enrollment and quiz -->
         <activity
             android:name=".ui.FallbackEnrollActivity"
             android:exported="false"
@@ -66,8 +78,8 @@
             android:exported="false"
             android:label="@string/quiz_title" />
 
-        <!-- Fallback UI: overlay shown when state = UNKNOWN.
-             Theme makes it transparent + on top per Mục 5.3.1. -->
+        <!-- Fallback shake-pattern UI shown when state = UNKNOWN.
+             Transparent theme + show-on-lock so it can overlay other apps. -->
         <activity
             android:name=".fallback.FallbackActivity"
             android:exported="false"
@@ -77,7 +89,7 @@
             android:taskAffinity=""
             android:theme="@style/Theme.Fallback" />
 
-        <!-- Foreground service (Mục 5.3.1, AuthenticationService) -->
+        <!-- Foreground service running the authentication loop -->
         <service
             android:name=".service.AuthenticationService"
             android:exported="false"

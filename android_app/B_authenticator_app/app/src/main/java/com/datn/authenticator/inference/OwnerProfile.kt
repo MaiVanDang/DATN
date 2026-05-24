@@ -8,36 +8,13 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 
-/**
- * Persists the owner's full biometric profile:
- *   - 6 IMU anchor embeddings (128-D)  → for cosine-sim fallback scoring
- *   - RF_inertial model                → primary inertial verifier
- *   - RF_touch model (optional)        → touch verifier (null if not enrolled)
- *   - fusion_w                         → inertial weight tuned at enrollment
- *
- * File format (binary, big-endian via Java DataOutputStream):
- *   [int  MAGIC_V2 = 0xACAF0002]
- *   [int  n_anchors]
- *   [int  embed_dim = 128]
- *   [float[] anchor_data]              n_anchors × embed_dim floats
- *   [float   fusion_w]
- *   [byte    has_touch_rf]             1 = present, 0 = absent
- *   [int     rf_inertial_bytes]        byte length of serialised RF
- *   [byte[]  rf_inertial_data]
- *   IF has_touch_rf:
- *     [int     rf_touch_bytes]
- *     [byte[]  rf_touch_data]
- */
 class OwnerProfile(context: Context) {
-
     private val file: File = File(context.filesDir, FILE_NAME)
 
     private var cachedAnchors: List<FloatArray>? = null
     private var cachedRfInertial: RandomForestClassifier? = null
     private var cachedRfTouch: RandomForestClassifier? = null
     private var cachedFusionW: Float = FusionEngine.DEFAULT_W
-
-    // ── Public read API ───────────────────────────────────────────────────
 
     fun hasEnrollment(): Boolean = file.exists() && getAnchors().isNotEmpty()
 
@@ -60,12 +37,10 @@ class OwnerProfile(context: Context) {
     }
 
     fun getFusionW(): Float {
-        if (cachedAnchors != null) return cachedFusionW  // already loaded
+        if (cachedAnchors != null) return cachedFusionW
         loadFromDisk()
         return cachedFusionW
     }
-
-    // ── Save ──────────────────────────────────────────────────────────────
 
     fun save(
         anchors: List<FloatArray>,
@@ -86,13 +61,11 @@ class OwnerProfile(context: Context) {
 
             dos.writeFloat(fusionW)
 
-            // RF inertial (always present)
             val rfIBytes = rfInertial.toByteArray()
             dos.writeByte(if (rfTouch != null) 1 else 0)
             dos.writeInt(rfIBytes.size)
             dos.write(rfIBytes)
 
-            // RF touch (optional)
             if (rfTouch != null) {
                 val rfTBytes = rfTouch.toByteArray()
                 dos.writeInt(rfTBytes.size)
@@ -108,7 +81,6 @@ class OwnerProfile(context: Context) {
         Log.i(TAG, "Profile saved: ${anchors.size} anchors, fusion_w=$fusionW, touch=${rfTouch != null}")
     }
 
-    /** Legacy save (anchors only, no RF) — keeps backward compat with old enrollment. */
     fun saveAnchors(anchors: List<FloatArray>) {
         require(anchors.isNotEmpty())
         DataOutputStream(FileOutputStream(file)).use { dos ->
@@ -130,8 +102,6 @@ class OwnerProfile(context: Context) {
         cachedRfTouch = null; cachedFusionW = FusionEngine.DEFAULT_W
         Log.i(TAG, "Owner profile cleared")
     }
-
-    // ── Load ──────────────────────────────────────────────────────────────
 
     private fun loadFromDisk() {
         if (!file.exists()) return
@@ -189,8 +159,6 @@ class OwnerProfile(context: Context) {
         private const val MAGIC_V2  = 0xACAF0002.toInt()
     }
 }
-
-// ── Extension helpers ─────────────────────────────────────────────────────────
 
 private fun RandomForestClassifier.toByteArray(): ByteArray {
     val buf = java.io.ByteArrayOutputStream()

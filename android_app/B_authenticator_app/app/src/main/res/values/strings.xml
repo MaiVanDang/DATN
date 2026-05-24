@@ -4,12 +4,12 @@
 
     <!-- Fallback -->
     <string name="fallback_title">Người dùng lạ — xác thực bằng cử chỉ lắc</string>
-    <string name="fallback_title_with_remaining">Còn %1$d giây — lắc đúng số lần đã đăng ký</string>
-    <string name="fallback_status">Bấm \"Bắt đầu xác thực\" rồi lắc điện thoại đúng số lần bí mật của bạn.</string>
+    <string name="fallback_title_with_remaining">Còn %1$d giây — lắc lại giống cách bạn đã đăng ký</string>
+    <string name="fallback_status">Bấm \"Bắt đầu xác thực\" rồi lắc điện thoại theo đúng cách bạn đã đăng ký.</string>
     <string name="fallback_counter">%1$d</string>
     <string name="fallback_not_enrolled">Bạn chưa đăng ký mẫu lắc. Vui lòng vào màn hình chính → Đăng ký.</string>
     <string name="fallback_max_failed">Đã sai quá nhiều lần — chuyển sang xác thực hệ thống.</string>
-    <string name="fallback_shake_now">Lắc đi! Hệ thống đang đếm…</string>
+    <string name="fallback_shake_now">Hệ thống đang đếm…</string>
     <string name="fallback_pass">Xác thực thành công (đã đếm %1$d lần lắc).</string>
     <string name="fallback_fail_timeout">Hết thời gian: đếm được %1$d. Sai lần %2$d.</string>
     <string name="fallback_fail_count">Đếm được %1$d (không khớp). Sai lần %2$d.</string>
@@ -19,19 +19,16 @@
 
     <!-- Owner biometric enrollment (TFLite backbone) -->
     <string name="enroll_owner_title">Đăng ký sinh trắc học</string>
-    <string name="enroll_owner_hint">Cầm điện thoại như bình thường. App sẽ thu 6 mẫu hành vi (mỗi mẫu 2 giây). Tổng thời gian ≈ 15 giây.</string>
+    <string name="enroll_owner_hint">Cầm điện thoại như bình thường. App sẽ thu tổng cộng khoảng 80 giây.</string>
     <string name="enroll_owner_ready">Sẵn sàng. Bấm \"Bắt đầu\" và cầm điện thoại tự nhiên.</string>
     <string name="enroll_owner_starting">Khởi động cảm biến…</string>
     <string name="enroll_owner_capturing">Đang thu mẫu %1$d / %2$d…</string>
     <string name="enroll_owner_done">Đã đăng ký thành công %1$d mẫu</string>
     <string name="enroll_owner_failed_sensor">Không đọc được cảm biến. Hãy thử lại.</string>
     <string name="enroll_owner_error">Lỗi: %1$s</string>
-    <string name="enroll_owner_cleared">Đã xoá hồ sơ</string>
     <string name="enroll_owner_summary_empty">Chưa đăng ký. Bấm \"Bắt đầu\" để đăng ký.</string>
     <string name="enroll_owner_summary_enrolled">Đã đăng ký: %1$d mẫu sinh trắc học</string>
     <string name="enroll_owner_start_btn">Bắt đầu đăng ký</string>
-    <string name="enroll_owner_clear_btn">Xoá hồ sơ</string>
-    <string name="enroll_owner_done_btn">Xong</string>
 
     <!-- Quiz screen -->
     <string name="quiz_title">Bài kiểm tra kiến thức</string>
@@ -40,4 +37,31 @@
     <string name="quiz_pick_answer">Hãy chọn một đáp án!</string>
     <string name="quiz_correct">Đúng! %1$s</string>
     <string name="quiz_wrong">Sai. Đáp án đúng: %1$s</string>
+
+    <!-- Mode selection -->
+    <string name="mode_select_title">Chọn chế độ huấn luyện</string>
+    <string name="mode_select_subtitle">Chọn loại model phù hợp với cách bạn hay dùng điện thoại. Có thể đổi lại sau.</string>
+    <string name="mode_select_footer_hint">Lưu ý: anchor và RF được gắn với 1 model cụ thể. Đổi chế độ sau khi đã enroll sẽ yêu cầu enroll lại từ đầu.</string>
+
+    <string name="mode_walking_title">Walking</string>
+    <string name="mode_walking_badge">EER 1.20%</string>
+    <string name="mode_walking_desc">Train chỉ trên dữ liệu đi bộ.</string>
+
+    <string name="mode_all_title">All-action</string>
+    <string name="mode_all_badge">Linh hoạt</string>
+    <string name="mode_all_desc">Train trên tất cả hoạt động (đi, ngồi, đứng, leo cầu thang…).</string>
+
+    <string name="mode_unavailable_hint">⚠️ Thiếu file model cho chế độ này trong assets/</string>
+    <string name="mode_unavailable_toast">Chế độ \"%1$s\" chưa có file backbone.tflite trong assets — hãy thêm vào để dùng.</string>
+
+    <string name="mode_switch_warning_title">Cần xoá hồ sơ cũ</string>
+    <string name="mode_switch_warning_msg">Đổi sang chế độ \"%1$s\" sẽ xoá toàn bộ anchor, RF và mẫu lắc đã đăng ký, vì embedding của model mới không tương thích với hồ sơ cũ. Tiếp tục?</string>
+    <string name="mode_switch_confirm">Xoá và tiếp tục</string>
+
+    <string name="enroll_owner_mode_indicator">Chế độ: %1$s</string>
+    <string name="enroll_owner_change_mode_btn">Đổi</string>
+
+    <string name="mode_change_dialog_title">Đổi chế độ huấn luyện</string>
+    <string name="mode_change_dialog_msg">Đổi chế độ sẽ xoá anchor sinh trắc học, RF và mẫu lắc hiện tại — bạn sẽ phải enroll lại từ đầu. Tiếp tục?</string>
+    <string name="mode_change_dialog_confirm">Xoá và chọn lại</string>
 </resources>

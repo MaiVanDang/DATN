@@ -1,6 +1,11 @@
 # Active Auth — Web Demo (Streamlit)
 
-Demo khoa học cho thesis defense. **V5-synced**: dùng artifacts (backbone, impostor pool, scaler) đã save từ training pipeline V5, đảm bảo demo cho ra kết quả khớp với metric trong báo cáo.
+Demo so sánh **6 biến thể model** song song:
+
+- **3 kiến trúc**: CNN, ConvLSTM, ConvLSTM-Bi
+- **2 chế độ training**: walking (1 action) + all (3 actions)
+
+Mỗi session test được score qua TẤT CẢ 6 model để so sánh trực tiếp.
 
 ## Cài đặt
 
@@ -8,7 +13,7 @@ Demo khoa học cho thesis defense. **V5-synced**: dùng artifacts (backbone, im
 cd demo
 python -m venv venv
 source venv/bin/activate          # Linux/Mac
-# venv\Scripts\activate            # Windows
+# venv\Scripts\activate           # Windows
 pip install -r requirements.txt
 ```
 
@@ -20,41 +25,37 @@ demo/
 ├── verifier.py
 ├── touch_features.py
 ├── models.py
+├── build_pool.py
 ├── requirements.txt
 ├── README.md
 │
-├── models/
-│   └── backbone.pt                       ← từ training V5
+├── artifacts/                            ← root chứa 3 model variants
+│   ├── cnn_v2/
+│   │   ├── models_walking/backbone.pt
+│   │   ├── models_all/backbone.pt
+│   │   ├── export_walking/               ← pool + scaler cho mode 'walking'
+│   │   │   ├── impostor_pool_inertial.npy
+│   │   │   ├── impostor_pool_touch.npy
+│   │   │   └── touch_scaler.json
+│   │   └── export_all/                   ← pool + scaler cho mode 'all'
+│   │       └── ...
+│   ├── convlstm_v2/
+│   │   └── (cấu trúc tương tự)
+│   └── convlstm_bi_v2/
+│       └── (cấu trúc tương tự)
 │
-├── export/                                ← TỪ TRAINING V5 — đảm bảo demo match báo cáo
-│   ├── impostor_pool_inertial.npy        (100, 128) — pool inertial
-│   ├── impostor_pool_touch.npy           (96, 47)   — pool touch đã scaled
-│   ├── touch_scaler.json                 — scaler params (mean + scale)
-│   └── backbone_metadata.json            — metadata users trained
+├── processed_data/                       ← cohort training data
+│   ├── user1/
+│   │   ├── X_walking.npy                 ← windows đi bộ
+│   │   ├── y_walking.npy                 ← session ID per window
+│   │   ├── X_inertial.npy                ← windows tất cả activity
+│   │   ├── y_inertial.npy
+│   │   └── touch_session_features.csv    ← 48-D touch features
+│   └── ... (≥2 users)
 │
-└── processed_data/                        ← data của cohort training (24 user)
-    ├── user1/
-    │   ├── X.npy                         — inertial windows shape (N, 9, 100)
-    │   ├── session.npy                   — session ID per window
-    │   ├── y.npy                         — activity labels (không dùng)
-    │   └── touch_session_features.csv    — 47-D touch features per session
-    ├── user2/
-    │   └── ...
-    └── ... (24 users)
-```
-
-## (Optional) Newbie data — cho thesis defense
-
-User CHƯA TỪNG xuất hiện trong training cohort:
-
-```
-demo/
-└── newbie_data/
-    ├── newbie1/
-    │   ├── X.npy
-    │   ├── session.npy
-    │   └── touch_session_features.csv
-    └── ...
+└── newbie_data/                          ← (optional) users UNSEEN
+    └── newbie1/
+        └── (cấu trúc tương tự processed_data)
 ```
 
 ## Chạy demo
@@ -63,54 +64,56 @@ demo/
 streamlit run app.py
 ```
 
-Browser tự mở http://localhost:8501
+Browser tự mở http://localhost:8501.
 
-## Đảm bảo demo match báo cáo
+## Flow demo
 
-Demo này khớp 100% với training pipeline V5 nhờ:
+### Bước 1: Sidebar — cấu hình + enrollment
 
-1. **Load pre-built impostor pool** từ `export/impostor_pool_*.npy` (không rebuild on-the-fly)
-2. **Load pre-fit StandardScaler** từ `export/touch_scaler.json` (fit trên pool only, không phải pool+owner)
-3. **Per-window fusion**: score touch (per-session) được broadcast lên từng window, fuse rồi mean
-4. **Tune fusion_w**: grid search 51 bước, tie-break ưu tiên 0.5 (giống `fusion.search_weight()` trong V5)
-5. **RF hyperparameters** giữ y nguyên: `n_estimators=200, max_features='sqrt', class_weight='balanced'`, `min_samples_leaf=2` (inertial) / `=1` (touch)
-
-## Flow demo cho thesis defense
-
-### Bước 1: Sidebar — Enrollment
-
-1. Verify sidebar hiển thị "✓ V5 artifacts loaded" với shape đúng
-2. Chọn `Owner user` = vd `user5`
-3. Chọn `Số session để enroll` = 4 (giữ 2 sessions làm test own-data)
-4. Bấm **Enroll** → train RF (~2-5 giây). Message sẽ show `fusion_w = X.XX` đã tune
+1. Verify sidebar hiển thị `✓ Loaded 6/6 variants`
+2. Chọn `Owner pool` (Cohort hoặc Newbie)
+3. Chọn `Owner user`
+4. Đặt `Số session để enroll` (mặc định 4)
+5. Bấm **Enroll all 6 variants** → train 6 RF (~30 giây)
 
 ### Bước 2: Tab "Own data" — FRR
 
-1. Bấm **Run own-data verification**
-2. Xem score 2 sessions còn lại — kỳ vọng TRUSTED, FRR = 0%
+Bấm **Run own-data verification** → bảng FRR per-variant + chi tiết từng session × variant.
 
 ### Bước 3: Tab "Single impostor"
 
-1. Chọn `Pick impostor user` lạ
-2. Bấm **Run impostor verification** — kỳ vọng REJECTED, FAR = 0%
+Pick impostor → **Run impostor verification** → so sánh FAR giữa 6 variants.
 
 ### Bước 4: Tab "Batch in-cohort"
 
-1. Bấm **Run batch verification**
-2. Xem FAR/FRR tổng, distribution chart owner vs impostor
+**Run batch verification** → tính FAR tổng trên tất cả cohort impostors, có distribution chart 2×3 (mỗi subplot 1 variant).
 
 ### Bước 5: Tab "Newbie" — generalization
 
-1. Pick newbie hoặc batch
-2. Bấm **Run newbie test**
-3. Kỳ vọng: Newbie cluster sát với in-cohort impostor (generalization tốt)
+Pick newbie hoặc batch → **Run newbie test** → đánh giá khả năng generalize của từng variant trên user UNSEEN.
+
+## Threshold
+
+Sidebar có toggle:
+
+- **Adaptive per-variant (mặc định)**: mỗi variant dùng EER threshold riêng tính từ val set lúc enroll
+- **Manual**: 1 threshold thủ công áp dụng cho cả 6 variant (để so sánh fair tại cùng operating point)
+
+## Bảng kết quả
+
+Mỗi tab hiển thị 2 thứ:
+
+1. **Metric summary** — 6 dòng (1 dòng/variant), cột FAR hoặc FRR, có highlight best (xanh) / worst (đỏ)
+2. **Detail table** — long-form, cột: `model | train_mode | test_user | session | p_inertial | p_touch | fused | threshold | decision | n_windows`
 
 ## Troubleshooting
 
-**`Lỗi load artifacts`**: kiểm tra `export/` chứa đủ 3 file `impostor_pool_inertial.npy`, `impostor_pool_touch.npy`, `touch_scaler.json`.
+**`❌ Thiếu các file/folder sau`**: kiểm tra `artifacts/` có đủ 3 model × 2 mode = 12 sub-folder (6 `models_*` + 6 `export_*`).
 
-**`touch_session_features.csv không tồn tại`**: chạy step2 của training pipeline để generate file này cho mỗi user, hoặc copy từ folder training của notebook.
+**`touch_session_features.csv không tồn tại`**: chạy step2 của training pipeline để generate file này.
 
-**Backbone size mismatch**: đã được handle trong `models.py`, demo bỏ classifier head khi load. Nếu vẫn lỗi, xoá `__pycache__/` rồi restart.
+**Backbone size mismatch**: đã được handle trong `models.py` (drop classifier head khi load nếu n_users khác lúc train).
 
-**Touch RF skipped**: 1 số user không có `touch_session_features.csv` hoặc < 2 session có touch. Demo tự fallback dùng pure inertial.
+**Touch RF skipped**: user không có touch data hoặc < 2 session có touch. Demo tự fallback dùng pure inertial cho variant đó.
+
+**Variant nào đó enroll thất bại**: app sẽ hiển thị warning và tiếp tục với các variant còn lại — không stop toàn bộ.

@@ -1,0 +1,22 @@
+{
+  "normalization_mode": "per_window_zscore",
+  "channel_order": [
+    "acc_x", "acc_y", "acc_z",
+    "gyro_x", "gyro_y", "gyro_z",
+    "mag_x",  "mag_y",  "mag_z"
+  ],
+  "epsilon": 1e-8,
+  "training_set_summary": {
+    "n_users": 19,
+    "global_mean_per_channel": [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "global_std_per_channel":  [1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "global_min_per_channel":  [-30, -30, -30, -15, -15, -15, -100, -100, -100],
+    "global_max_per_channel":  [ 30,  30,  30,  15,  15,  15,  100,  100,  100]
+  },
+  "expected_input_ranges_after_normalization": {
+    "z_score_typical_range": [-3.0, 3.0],
+    "z_score_clip": false,
+    "warn_if_outside": [-6.0, 6.0]
+  },
+  "version": "v5-active-auth"
+}

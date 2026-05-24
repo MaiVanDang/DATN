@@ -2,17 +2,9 @@ package com.datn.authenticator.model
 
 import android.content.Context
 import org.json.JSONObject
+import kotlin.math.max
+import kotlin.math.sqrt
 
-/**
- * Wraps `scaler_params.json` produced by `A_export_pipeline/export_scaler.py`.
- *
- * Two normalization modes are supported (mirroring the Python side):
- *   - "per_window_zscore"        — Z-score computed per window per channel
- *                                   (the default in this thesis, §4.4.5).
- *   - "fitted_standard_scaler"   — fixed mean/scale per channel.
- *
- * The Android side picks the matching code path in [normalize].
- */
 data class ScalerParams(
     val mode: String,
     val channelOrder: List<String>,
@@ -21,10 +13,6 @@ data class ScalerParams(
     val fittedScale: FloatArray? = null,
     val warnIfOutside: Pair<Float, Float>? = null,
 ) {
-    /**
-     * Normalize an unnormalized raw window in-place. Caller passes the same
-     * SensorWindow.data layout (timestep-major, 9 channels).
-     */
     fun normalize(rawData: FloatArray): FloatArray {
         require(rawData.size == SensorWindow.TIMESTEPS * SensorWindow.CHANNELS)
         return when (mode) {
@@ -34,13 +22,11 @@ data class ScalerParams(
         }
     }
 
-    /** Z-score per channel computed using only THIS window's stats. */
     private fun normalizePerWindow(raw: FloatArray): FloatArray {
         val out = FloatArray(raw.size)
         val sums = FloatArray(SensorWindow.CHANNELS)
         val sumSq = FloatArray(SensorWindow.CHANNELS)
 
-        // Mean
         for (t in 0 until SensorWindow.TIMESTEPS) {
             for (c in 0 until SensorWindow.CHANNELS) {
                 val v = raw[t * SensorWindow.CHANNELS + c]
@@ -51,8 +37,7 @@ data class ScalerParams(
         val mean = FloatArray(SensorWindow.CHANNELS) { sums[it] / SensorWindow.TIMESTEPS }
         val std = FloatArray(SensorWindow.CHANNELS) {
             val variance = sumSq[it] / SensorWindow.TIMESTEPS - mean[it] * mean[it]
-            // Numerical guard for tiny negatives from FP error
-            kotlin.math.sqrt(kotlin.math.max(variance, 0f))
+            sqrt(max(variance, 0f))
         }
 
         for (t in 0 until SensorWindow.TIMESTEPS) {
@@ -64,7 +49,6 @@ data class ScalerParams(
         return out
     }
 
-    /** Standard fitted scaler: (x - mean) / scale. */
     private fun normalizeFitted(raw: FloatArray): FloatArray {
         val mean = checkNotNull(fittedMean) { "fittedMean missing" }
         val scale = checkNotNull(fittedScale) { "fittedScale missing" }
@@ -78,7 +62,6 @@ data class ScalerParams(
         return out
     }
 
-    /** True if any normalized value is outside the warn range — useful for drift detection. */
     fun isLikelyDriftedFromTraining(normalized: FloatArray): Boolean {
         val (lo, hi) = warnIfOutside ?: return false
         return normalized.any { it < lo || it > hi }
@@ -104,7 +87,6 @@ data class ScalerParams(
     }
 
     companion object {
-        /** Loads from assets (`assets/scaler_params.json` or `assets/<owner>/scaler_params.json`). */
         fun loadFromAssets(context: Context, assetPath: String = "scaler_params.json"): ScalerParams {
             val text = context.assets.open(assetPath).bufferedReader().use { it.readText() }
             val root = JSONObject(text)
@@ -142,7 +124,6 @@ data class ScalerParams(
             )
         }
 
-        /** Default fallback: standard per-window Z-score. Used if asset missing (debug only). */
         fun defaultPerWindow(): ScalerParams = ScalerParams(
             mode = "per_window_zscore",
             channelOrder = listOf(

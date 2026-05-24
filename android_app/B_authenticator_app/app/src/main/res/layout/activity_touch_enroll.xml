@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <!-- ── Header ── -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Đăng ký hành vi chạm"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <ProgressBar
+            android:id="@+id/feProgress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="16dp"
+            android:layout_marginBottom="8dp"
+            android:max="3"
+            android:progress="0" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Hoàn thành 3 bài tập ngắn để hệ thống học cách bạn tương tác với màn hình."
+            android:textSize="13sp"
+            android:textColor="#555555" />
+
+        <!-- ── Step indicator ── -->
+        <TextView
+            android:id="@+id/teStepLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Bước 1 / 3: Nhấn màn hình"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorPrimary" />
+
+        <ProgressBar
+            android:id="@+id/teStepProgress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="8dp"
+            android:layout_marginTop="6dp"
+            android:max="3"
+            android:progress="1" />
+
+        <!-- ── Task progress counter ── -->
+        <TextView
+            android:id="@+id/teTaskProgress"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:gravity="center"
+            android:text="0 / 15"
+            android:textSize="52sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorPrimary" />
+
+        <TextView
+            android:id="@+id/teTaskUnit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="lần nhấn"
+            android:textSize="14sp"
+            android:textColor="#666666" />
+
+        <!-- ── Divider ── -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="16dp"
+            android:background="#DDDDDD" />
+
+        <!-- ══════════════════════════════════════════════════
+             TASK 1: TAP
+             ══════════════════════════════════════════════════ -->
+        <LinearLayout
+            android:id="@+id/teSectionTap"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="visible">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Nhấn nút bên dưới 15 lần."
+                android:textSize="15sp" />
+
+            <Button
+                android:id="@+id/teBtnTapTarget"
+                android:layout_width="match_parent"
+                android:layout_height="120dp"
+                android:layout_marginTop="20dp"
+                android:text="NHẤN VÀO ĐÂY"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+        <!-- ══════════════════════════════════════════════════
+             TASK 2: SCROLL
+             ══════════════════════════════════════════════════ -->
+        <LinearLayout
+            android:id="@+id/teSectionScroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Lướt ngón tay lên / xuống 8 lần trong vùng bên dưới."
+                android:textSize="15sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Hệ thống ghi nhận tốc độ, quỹ đạo và hướng lướt của bạn."
+                android:textSize="13sp"
+                android:textColor="#777777" />
+
+        </LinearLayout>
+
+        <!-- ══════════════════════════════════════════════════
+             TASK 3: KEYSTROKE
+             ══════════════════════════════════════════════════ -->
+        <LinearLayout
+            android:id="@+id/teSectionKeystroke"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Gõ bất kỳ điều gì cho đến khi đạt 60 ký tự."
+                android:textSize="15sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Hệ thống học nhịp điệu gõ phím — nội dung không quan trọng. Hãy gõ tự nhiên."
+                android:textSize="13sp"
+                android:textColor="#777777" />
+
+            <EditText
+                android:id="@+id/teEtTyping"
+                android:layout_width="match_parent"
+                android:layout_height="140dp"
+                android:layout_marginTop="16dp"
+                android:gravity="top|start"
+                android:hint="Gõ vào đây…"
+                android:inputType="textMultiLine|textAutoCorrect"
+                android:padding="12dp"
+                android:background="@android:drawable/edit_text"
+                android:textSize="16sp" />
+
+        </LinearLayout>
+
+        <!-- ── Next / Finish button ── -->
+        <Button
+            android:id="@+id/teBtnNext"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="28dp"
+            android:enabled="false"
+            android:text="Tiếp: Lướt màn hình  ›"
+            android:textSize="16sp" />
+
+    </LinearLayout>
+</ScrollView>

@@ -23,15 +23,7 @@ import com.datn.authenticator.inference.TouchCollector
 import com.datn.authenticator.model.AuthState
 import com.datn.authenticator.service.AuthenticationService
 
-/**
- * Quiz screen shown after enrollment. AuthenticationService runs throughout,
- * monitoring the user's inertial + touch behaviour while they interact with quiz.
- *
- * Score / state banner at the top updates every second from the running service.
- * FallbackActivity is launched by the service itself on UNKNOWN/WARNING-timeout.
- */
 class QuizActivity : AppCompatActivity() {
-
     private lateinit var tvState: TextView
     private lateinit var tvScore: TextView
     private lateinit var tvQuestion: TextView
@@ -143,7 +135,6 @@ class QuizActivity : AppCompatActivity() {
         tvScore.text = "Tin cậy: ${"%.0f".format(scoreVal * 100)}%"
         tvScore.setTextColor(stateColor)
 
-        // Update status bar background to reflect urgency
         val bar = findViewById<View>(R.id.quizStatusBar)
         bar.setBackgroundColor(when (state) {
             AuthState.TRUSTED -> 0xFFE8F5E9.toInt()

@@ -1,15 +1,14 @@
 """
-verifier.py — Core logic cho web demo (V5-SYNCED FINAL)
+verifier.py — Core verification logic.
 
-Đồng bộ 100% với training pipeline V5:
-  • Load impostor pool inertial + touch từ artifacts (export/*.npy)
-    → KHÔNG rebuild on-the-fly (đảm bảo pool giống hệt notebook)
-  • Load touch_scaler.json từ artifacts → fit on POOL only (giống notebook)
-  • Per-window fusion: s_t broadcast per-window, fused per-window rồi mean
+Pipeline:
+  • Load impostor pool inertial + touch (pre-built) + scaler từ export/
+  • Per-window fusion: touch score broadcast per-window, fuse rồi mean
   • Tune fusion_w bằng grid search trên held-out enroll session (51 steps,
-    tie-break ưu tiên 0.5 — giống fusion.py trong notebook)
+    tie-break ưu tiên 0.5)
+  • Adaptive threshold tại điểm EER trên val set
 
-Hyperparameters RF giữ y nguyên notebook V5 (config.py):
+RF hyperparameters:
   n_estimators=200, max_features='sqrt', class_weight='balanced'
   min_samples_leaf=2 (inertial), 1 (touch)
 """
@@ -26,11 +25,11 @@ from touch_features import build_session_features, FEAT_DIM as TOUCH_DIM, FEATUR
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Artifacts loading (pool + scaler từ notebook V5)
+# Artifacts loading (pool + scaler)
 # ═══════════════════════════════════════════════════════════════════
 
-class V5Artifacts:
-    """Container cho impostor pool + scaler đã được pre-built từ notebook."""
+class Artifacts:
+    """Container cho impostor pool + touch scaler pre-built."""
 
     def __init__(self,
                  pool_inertial: np.ndarray,
@@ -43,11 +42,10 @@ class V5Artifacts:
         self.touch_scale = touch_scale
 
     def transform_touch(self, vec_or_matrix: np.ndarray) -> np.ndarray:
-        """Apply scaler đã fit từ notebook V5."""
         return (vec_or_matrix - self.touch_mean) / self.touch_scale
 
 
-def load_artifacts(export_dir: Path) -> V5Artifacts:
+def load_artifacts(export_dir: Path) -> Artifacts:
     """Load pool inertial + pool touch (đã scaled) + scaler params."""
     export_dir = Path(export_dir)
 
@@ -63,7 +61,7 @@ def load_artifacts(export_dir: Path) -> V5Artifacts:
     assert pool_t.shape[1] == TOUCH_DIM, f"Pool touch dim {pool_t.shape[1]} != {TOUCH_DIM}"
     assert len(mean) == TOUCH_DIM, f"Scaler mean dim {len(mean)} != {TOUCH_DIM}"
 
-    return V5Artifacts(
+    return Artifacts(
         pool_inertial=pool_i.astype(np.float32),
         pool_touch_scaled=pool_t.astype(np.float32),
         touch_mean=mean,
@@ -75,7 +73,17 @@ def load_artifacts(export_dir: Path) -> V5Artifacts:
 # Data loading
 # ═══════════════════════════════════════════════════════════════════
 
+# File mapping cho 2 chế độ training:
+#   walking : chỉ window đi bộ (X_walking.npy)
+#   all     : tất cả activity (X_inertial.npy)
+_FILE_BY_MODE = {
+    'walking': ('X_walking.npy', 'y_walking.npy'),
+    'all':     ('X_inertial.npy', 'y_inertial.npy'),
+}
+
+
 def list_available_users(data_dir: Path) -> list:
+    """List users có ít nhất 1 trong 2 file inertial."""
     if not data_dir.exists():
         return []
     users = []
@@ -87,15 +95,29 @@ def list_available_users(data_dir: Path) -> list:
     return users
 
 
-def load_user_inertial(user_id: str, data_dir: Path) -> dict:
-    """Load inertial data. Dùng X_walking.npy — backbone train trên walking only.
-    Fallback về X_inertial.npy nếu không có X_walking.npy."""
+def load_user_inertial(user_id: str, data_dir: Path, mode: str = 'walking') -> dict:
+    """Load inertial windows cho 1 user, group theo session_id.
+
+    mode:
+      'walking' → X_walking.npy (chỉ window đi bộ)
+      'all'     → X_inertial.npy (tất cả activity)
+
+    Fallback sang file còn lại nếu file chính không tồn tại. Trả {} nếu
+    không có file nào.
+    """
     user_dir = data_dir / user_id
-    x_path = user_dir / 'X_walking.npy'
-    y_path = user_dir / 'y_walking.npy'
+    x_name, y_name = _FILE_BY_MODE.get(mode, _FILE_BY_MODE['walking'])
+    x_path = user_dir / x_name
+    y_path = user_dir / y_name
+
     if not x_path.exists():
-        x_path = user_dir / 'X_inertial.npy'
-        y_path = user_dir / 'y_inertial.npy'
+        # Fallback sang file còn lại
+        alt_x, alt_y = _FILE_BY_MODE['all' if mode == 'walking' else 'walking']
+        x_path = user_dir / alt_x
+        y_path = user_dir / alt_y
+        if not x_path.exists():
+            return {}
+
     X = np.load(x_path)
     sess = np.load(y_path, allow_pickle=True)
     sessions = {}
@@ -114,7 +136,7 @@ def normalize_window_layout(windows: np.ndarray) -> np.ndarray:
     n_ch = 9
     if windows.shape[2] == n_ch:          # (N, T, 9) → (N, 9, T)
         windows = windows.transpose(0, 2, 1)
-    elif windows.shape[1] == n_ch:        # (N, 9, T) — already channel-first
+    elif windows.shape[1] == n_ch:        # (N, 9, T) — channel-first
         pass
     else:
         raise ValueError(f"Unexpected window shape {windows.shape}")
@@ -132,7 +154,7 @@ def zscore_per_window(windows: np.ndarray, eps: float = 1e-8) -> np.ndarray:
 # ═══════════════════════════════════════════════════════════════════
 
 def extract_embeddings(encoder: torch.nn.Module, windows: np.ndarray) -> np.ndarray:
-    """Input (N, 9, 100) → Output (N, 128)."""
+    """Input (N, 9, T) → Output (N, 128)."""
     windows = normalize_window_layout(windows)
     windows = zscore_per_window(windows)
     with torch.no_grad():
@@ -147,9 +169,9 @@ def extract_embeddings(encoder: torch.nn.Module, windows: np.ndarray) -> np.ndar
 
 def _build_touch_impostor_pool(owner_id: str,
                                 data_dir: Path,
-                                artifacts: V5Artifacts) -> np.ndarray:
-    """
-    Gom touch vectors từ tất cả users TRỪ owner_id, rồi scale.
+                                artifacts: Artifacts) -> np.ndarray:
+    """Gom touch vectors từ tất cả users TRỪ owner_id, rồi scale.
+
     Tránh data leakage: owner data KHÔNG được nằm trong negative pool.
     Fallback về artifacts.pool_touch_scaled nếu không tìm được vector nào.
     """
@@ -173,10 +195,10 @@ def _build_touch_impostor_pool(owner_id: str,
             vectors.append(mat)
 
     if not vectors:
-        return artifacts.pool_touch_scaled  # fallback
+        return artifacts.pool_touch_scaled
 
     arr = np.vstack(vectors).astype(np.float64)
-    # Cap ở 100 vectors — giống notebook POOL_SIZE_TOUCH=100
+    # Cap ở 100 vectors
     if len(arr) > 100:
         rng = np.random.default_rng(42)
         arr = arr[rng.choice(len(arr), size=100, replace=False)]
@@ -189,8 +211,9 @@ def _build_touch_impostor_pool(owner_id: str,
 
 class Enrollment:
     def __init__(self, owner_id, enroll_sessions, rf_inertial, rf_touch,
-                 artifacts: V5Artifacts, fusion_w: float,
-                 adaptive_threshold: float = 0.5):
+                 artifacts: Artifacts, fusion_w: float,
+                 adaptive_threshold: float = 0.5,
+                 data_mode: str = 'walking'):
         self.owner_id = owner_id
         self.enroll_sessions = enroll_sessions
         self.rf_inertial = rf_inertial
@@ -198,17 +221,21 @@ class Enrollment:
         self.artifacts = artifacts
         self.fusion_w = fusion_w
         self.adaptive_threshold = adaptive_threshold
+        self.data_mode = data_mode    # 'walking' hoặc 'all'
 
 
 def _build_inertial_impostor_pool(owner_id: str,
                                    data_dir: Path,
                                    encoder: torch.nn.Module,
-                                   artifacts: V5Artifacts,
+                                   artifacts: Artifacts,
+                                   data_mode: str = 'walking',
                                    seed: int = 42) -> np.ndarray:
-    """
-    Build inertial impostor pool on-the-fly, loại trừ owner_id.
-    Tránh data leakage: pool từ notebook V5 chứa embeddings của CẢ owner,
-    khiến RF bị confused (owner data xuất hiện ở cả class 0 lẫn class 1).
+    """Build inertial impostor pool on-the-fly, loại trừ owner_id.
+
+    Tránh data leakage: pool pre-built có thể chứa embeddings của CẢ owner
+    (do build chung khi train), khiến RF bị confused — owner data xuất hiện
+    ở cả class 0 lẫn class 1.
+
     Fallback về artifacts.pool_inertial nếu không có user nào khác.
     """
     embeds = []
@@ -218,7 +245,7 @@ def _build_inertial_impostor_pool(owner_id: str,
         if not (user_dir / 'X_inertial.npy').exists() and not (user_dir / 'X_walking.npy').exists():
             continue
         try:
-            u_sessions = load_user_inertial(user_dir.name, data_dir)
+            u_sessions = load_user_inertial(user_dir.name, data_dir, mode=data_mode)
             for w in u_sessions.values():
                 if len(w) > 0:
                     emb = extract_embeddings(encoder, w)
@@ -227,7 +254,7 @@ def _build_inertial_impostor_pool(owner_id: str,
             continue
 
     if not embeds:
-        return artifacts.pool_inertial  # fallback: chỉ xảy ra nếu chỉ có 1 user
+        return artifacts.pool_inertial
 
     arr = np.concatenate(embeds, axis=0)
     max_size = len(artifacts.pool_inertial)
@@ -241,44 +268,45 @@ def enroll(owner_id: str,
            n_enroll_sessions: int,
            data_dir: Path,
            encoder: torch.nn.Module,
-           artifacts: V5Artifacts,
+           artifacts: Artifacts,
+           data_mode: str = 'walking',
            seed: int = 42,
            impostor_dir: Path | None = None) -> Enrollment:
-    """Train per-user RF for inertial + touch using V5 pre-built pools.
+    """Train per-user RF cho inertial + touch.
 
-    impostor_dir : thư mục lấy pool ÂM tính. Mặc định = data_dir (khi owner là
-        cohort user). Khi owner là NEWBIE, app phải truyền impostor_dir = cohort
-        data_dir riêng, nếu không pool sẽ chỉ chứa newbie khác → RF train sai
-        phân phối → cohort user bị nhận nhầm là TRUSTED ở Tab 3.
+    data_mode    : 'walking' hoặc 'all' — quyết định file inertial nào dùng.
+    impostor_dir : thư mục lấy pool ÂM tính. Mặc định = data_dir. Khi owner
+        là NEWBIE, phải truyền impostor_dir = cohort data_dir, không thì
+        pool chỉ chứa newbie khác → RF train sai phân phối → cohort user
+        bị nhận nhầm là TRUSTED.
     """
     if impostor_dir is None:
         impostor_dir = data_dir
 
-    sessions = load_user_inertial(owner_id, data_dir)
+    sessions = load_user_inertial(owner_id, data_dir, mode=data_mode)
     session_keys = sorted(sessions.keys())
     enroll_keys = session_keys[:n_enroll_sessions]
     if len(enroll_keys) < n_enroll_sessions:
         raise ValueError(f"{owner_id} only has {len(session_keys)} sessions; "
                          f"requested {n_enroll_sessions}")
 
-    # Tách session cuối làm val cho fusion_w tuning (không dùng để train RF)
-    # → cần ít nhất 4 sessions: RF dùng 3+, val dùng 1
-    # → nếu chỉ có ≤3 sessions: dùng tất cả cho RF, fusion_w = 0.5 mặc định
+    # Tách session cuối làm val cho fusion_w tuning (không dùng để train RF).
+    # Cần ≥ 4 sessions: RF dùng 3+, val dùng 1. Nếu ≤3 sessions → dùng tất cả
+    # cho RF, fusion_w = 0.5 mặc định.
     if len(enroll_keys) >= 4:
         rf_keys = enroll_keys[:-1]
         val_key = enroll_keys[-1]
     else:
         rf_keys  = enroll_keys
-        val_key  = None  # không đủ → fusion_w = 0.5
+        val_key  = None
 
     # ── RF INERTIAL: owner embeddings + on-the-fly pool (loại trừ owner) ──
-    # Dùng pool build on-the-fly thay vì artifacts.pool_inertial vì pool từ
-    # training chứa embeddings của chính owner → data leakage → P(owner) < 0.5
     owner_windows = np.concatenate([sessions[s] for s in rf_keys], axis=0)
     owner_embeds = extract_embeddings(encoder, owner_windows)
 
-    inertial_pool = _build_inertial_impostor_pool(owner_id, impostor_dir, encoder,
-                                                   artifacts, seed)
+    inertial_pool = _build_inertial_impostor_pool(
+        owner_id, impostor_dir, encoder, artifacts, data_mode, seed,
+    )
     X_in = np.concatenate([owner_embeds, inertial_pool], axis=0)
     y_in = np.array([1] * len(owner_embeds) + [0] * len(inertial_pool))
 
@@ -286,16 +314,16 @@ def enroll(owner_id: str,
         n_estimators=200,
         max_features='sqrt',
         class_weight='balanced',
-        min_samples_leaf=2,      # V5 config
+        min_samples_leaf=2,
         random_state=seed,
         n_jobs=-1,
     )
     rf_inertial.fit(X_in, y_in)
 
-    # ── RF TOUCH: owner vecs (scaled bằng V5 scaler) + pre-built scaled pool ──
+    # ── RF TOUCH: owner vecs (scaled) + pre-built scaled pool (loại owner) ──
     user_dir = data_dir / owner_id
     owner_touch_raw = []
-    for s in rf_keys:   # chỉ dùng rf_keys, KHÔNG dùng val_key
+    for s in rf_keys:
         v = build_session_features(user_dir, {s})
         if v is not None:
             owner_touch_raw.append(v)
@@ -305,7 +333,6 @@ def enroll(owner_id: str,
         owner_touch_arr = np.asarray(owner_touch_raw, dtype=np.float64)
         owner_touch_scaled = artifacts.transform_touch(owner_touch_arr).astype(np.float32)
 
-        # Pool PHẢI loại owner ra — tránh owner data nằm trong negative class
         impostor_touch = _build_touch_impostor_pool(owner_id, impostor_dir, artifacts)
         X_t = np.concatenate([owner_touch_scaled, impostor_touch], axis=0)
         y_t = np.array([1] * len(owner_touch_scaled) + [0] * len(impostor_touch))
@@ -314,13 +341,13 @@ def enroll(owner_id: str,
             n_estimators=200,
             max_features='sqrt',
             class_weight='balanced',
-            min_samples_leaf=1,      # =1 khớp với notebook V5 config
+            min_samples_leaf=1,
             random_state=seed,
             n_jobs=-1,
         )
         rf_touch.fit(X_t, y_t)
 
-    # ── Tune fusion_w + compute adaptive threshold từ held-out val set ──
+    # ── Tune fusion_w + tính adaptive threshold từ val set ──
     fusion_w, adaptive_threshold = _tune_enrollment_params(
         owner_id=owner_id,
         val_key=val_key,
@@ -330,17 +357,15 @@ def enroll(owner_id: str,
         rf_touch=rf_touch,
         artifacts=artifacts,
         impostor_dir=impostor_dir,
+        data_mode=data_mode,
     )
 
     return Enrollment(owner_id, enroll_keys, rf_inertial, rf_touch,
-                      artifacts, fusion_w, adaptive_threshold)
+                      artifacts, fusion_w, adaptive_threshold, data_mode)
 
 
 def _find_eer_threshold(y_true: np.ndarray, scores: np.ndarray) -> float:
-    """
-    Tìm threshold tại điểm EER (Equal Error Rate): FAR ≈ FRR.
-    Dùng sklearn roc_curve — trả về threshold ∈ [0, 1].
-    """
+    """Tìm threshold tại điểm EER (Equal Error Rate): FAR ≈ FRR."""
     if len(np.unique(y_true)) < 2:
         return 0.5
     fpr, tpr, thresholds = roc_curve(y_true, scores)
@@ -351,18 +376,15 @@ def _find_eer_threshold(y_true: np.ndarray, scores: np.ndarray) -> float:
 
 def _tune_enrollment_params(owner_id, val_key, data_dir, encoder,
                              rf_inertial, rf_touch,
-                             artifacts: V5Artifacts,
-                             impostor_dir: Path | None = None) -> tuple[float, float]:
-    """
-    Tính (fusion_w, adaptive_threshold) từ held-out val set.
+                             artifacts: Artifacts,
+                             impostor_dir: Path | None = None,
+                             data_mode: str = 'walking') -> tuple[float, float]:
+    """Tính (fusion_w, adaptive_threshold) từ held-out val set.
 
-    - fusion_w  : grid-search AUC, 51 steps, tie-break về 0.5
-    - adaptive_threshold : threshold tại điểm EER trên val set với fusion_w tối ưu
+    - fusion_w : grid-search AUC, 51 steps, tie-break về 0.5
+    - adaptive_threshold : threshold tại điểm EER với fusion_w tối ưu
 
-    Val set = val_key (session held-out, KHÔNG trong RF train) + 1 session/user khác.
-    Negatives lấy từ impostor_dir (mặc định = data_dir). Khi owner là newbie,
-    impostor_dir phải = cohort data_dir để threshold calibrate đúng phân phối.
-    Nếu val_key is None (< 4 enroll sessions) → trả về defaults (0.5, 0.5).
+    Val set = val_key (session held-out) + 1 session/user khác.
     """
     if val_key is None:
         return (1.0 if rf_touch is None else 0.5), 0.5
@@ -370,23 +392,23 @@ def _tune_enrollment_params(owner_id, val_key, data_dir, encoder,
     if impostor_dir is None:
         impostor_dir = data_dir
 
-    # ── Build val set ──────────────────────────────────────────────
+    # Build val set
     val_data = [(owner_id, val_key, 1, data_dir)]
     for u in list_available_users(impostor_dir):
         if u == owner_id:
             continue
         try:
-            u_sess = load_user_inertial(u, impostor_dir)
+            u_sess = load_user_inertial(u, impostor_dir, mode=data_mode)
         except Exception:
             continue
         if u_sess:
             val_data.append((u, sorted(u_sess.keys())[0], 0, impostor_dir))
 
-    # ── Collect per-window scores ──────────────────────────────────
+    # Collect per-window scores
     s_i_all, s_t_all, y_all = [], [], []
     for uid, sid, label, src_dir in val_data:
         try:
-            u_sess = load_user_inertial(uid, src_dir)
+            u_sess = load_user_inertial(uid, src_dir, mode=data_mode)
         except Exception:
             continue
         if sid not in u_sess or len(u_sess[sid]) == 0:
@@ -414,7 +436,7 @@ def _tune_enrollment_params(owner_id, val_key, data_dir, encoder,
     if len(np.unique(y)) < 2:
         return (1.0 if rf_touch is None else 0.5), 0.5
 
-    # ── Grid-search fusion_w ───────────────────────────────────────
+    # Grid-search fusion_w
     if rf_touch is None:
         fusion_w = 1.0
     else:
@@ -432,7 +454,7 @@ def _tune_enrollment_params(owner_id, val_key, data_dir, encoder,
                 best_w, best_dist = float(w), dist
         fusion_w = best_w
 
-    # ── Tính EER threshold từ fused scores với fusion_w tối ưu ────
+    # Tính EER threshold từ fused scores với fusion_w tối ưu
     fused_val = fusion_w * s_i + (1 - fusion_w) * s_t
     adaptive_threshold = _find_eer_threshold(y, fused_val)
 
@@ -448,20 +470,23 @@ def verify_session(enrollment: Enrollment,
                    test_session_id: str,
                    data_dir: Path,
                    encoder: torch.nn.Module) -> dict:
-    """Score 1 session. Fusion per-window rồi aggregate (giống V5)."""
+    """Score 1 session. Fusion per-window rồi aggregate."""
 
-    sessions = load_user_inertial(test_user_id, data_dir)
+    sessions = load_user_inertial(test_user_id, data_dir, mode=enrollment.data_mode)
+    is_owner = (test_user_id == enrollment.owner_id)
     if test_session_id not in sessions or len(sessions[test_session_id]) == 0:
         return {
             'test_user': test_user_id, 'session': test_session_id,
+            'is_actual_owner': is_owner,
             'p_inertial': None, 'p_touch': None, 'fused': None,
             'decision': 'NO_DATA', 'n_windows': 0,
+            'correct': False,
         }
 
     windows = sessions[test_session_id]
     embeds = extract_embeddings(encoder, windows)
     p_i_per_window = enrollment.rf_inertial.predict_proba(embeds)[:, 1]
-    p_inertial = float(p_i_per_window.mean())   # for display
+    p_inertial = float(p_i_per_window.mean())
 
     # Touch score (session-level, broadcast per-window for fusion)
     p_touch = None
@@ -473,15 +498,13 @@ def verify_session(enrollment: Enrollment,
         ).astype(np.float32)
         p_touch = float(enrollment.rf_touch.predict_proba(v_scaled)[0, 1])
 
-    # Per-window fusion → aggregate
+    # Fusion: inertial score (mean over windows) + touch score (session-level)
     if p_touch is not None:
         w = enrollment.fusion_w
-        fused_per_window = w * p_i_per_window + (1 - w) * p_touch
-        fused = float(fused_per_window.mean())
+        fused = w * p_inertial + (1 - w) * p_touch
     else:
         fused = p_inertial
 
-    is_owner = (test_user_id == enrollment.owner_id)
     decision = 'TRUSTED' if fused >= enrollment.adaptive_threshold else 'REJECTED'
 
     return {
@@ -513,7 +536,7 @@ def verify_batch_impostors(enrollment: Enrollment, data_dir: Path,
     other_users = [u for u in list_available_users(data_dir)
                    if u != enrollment.owner_id]
     for u in other_users:
-        sessions = load_user_inertial(u, data_dir)
+        sessions = load_user_inertial(u, data_dir, mode=enrollment.data_mode)
         keys = sorted(sessions.keys())[:n_sessions_per_user]
         for s in keys:
             row = verify_session(enrollment, u, s, data_dir, encoder)
