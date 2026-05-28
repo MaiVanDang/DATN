@@ -24,7 +24,7 @@ from verifier import (
 # ── CONFIG ────────────────────────────────────────────────────────────
 DATA_DIR      = Path(__file__).parent / "processed_data"
 ARTIFACTS_DIR = Path(__file__).parent / "artifacts"
-N_ENROLL      = 3      # số session enroll
+N_ENROLL      = 4      # số session enroll
 MAX_IMP_EMB   = 200    # cap impostor pool size
 MAX_WIN_SESS  = 50     # max windows lấy từ mỗi session (tránh hàng nghìn windows)
 N_JOBS        = -1

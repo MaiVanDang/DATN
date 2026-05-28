@@ -2,7 +2,7 @@
   "owner_id": "on_device_enrollment",
   "model_file": "backbone.tflite",
   "scaler_file": "scaler_params.json",
-  "model_kind": "backbone_encoder",
+  "model_kind": "backbone_encoder_cnn",
   "input_shape": [
     1,
     200,
@@ -25,8 +25,8 @@
   "anchor_count": 6,
   "sigmoid_scale": 8.0,
   "sigmoid_bias": 0.3,
-  "source_checkpoint": "cnn_v2 walking — AUC_fusion=0.9965 EER=1.20%",
-  "exported_at": "2026-05-24T08:29:19Z",
-  "export_pipeline_version": "v4-cnn-keras-tflite",
+  "source_checkpoint": "cnn_v2 walking",
+  "exported_at": "2026-05-26T18:15:25Z",
+  "export_pipeline_version": "v5-unified-tflite",
   "context_mode": "walking"
 }

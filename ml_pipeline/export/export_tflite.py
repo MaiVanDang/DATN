@@ -13,6 +13,7 @@ import numpy as np
 # ══════════════════════════════════════════════════════════
 #   CHỌN MODEL Ở ĐÂY
 MODEL = "cnn"          # "cnn"  |  "convlstm"  |  "convlstm_bi"
+TRAIN_MODE = "all" # "walking" | "all"
 # ══════════════════════════════════════════════════════════
 
 assert MODEL in ("cnn", "convlstm", "convlstm_bi"), f"Unknown model: {MODEL}"
@@ -28,19 +29,19 @@ import torch.nn as nn
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 ROOT     = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-ARTIFACTS = os.path.join(ROOT, "ml_pipeline", "training", "artifacts")
+ARTIFACTS = os.path.join(ROOT, "web_demo", "artifacts")
 
 MODEL_DIR = {
-    "cnn":         os.path.join(ARTIFACTS, "backbonecnn"),
-    "convlstm":    os.path.join(ARTIFACTS, "convlstm"),
-    "convlstm_bi": os.path.join(ARTIFACTS, "convlstm_bi"),
+    "cnn":         os.path.join(ARTIFACTS, "cnn_v2"),
+    "convlstm":    os.path.join(ARTIFACTS, "convlstm_v2"),
+    "convlstm_bi": os.path.join(ARTIFACTS, "convlstm_bi_v2"),
 }[MODEL]
 
-PT_PATH    = os.path.join(MODEL_DIR, "models", "backbone.pt")
-OUT_TFLITE = os.path.join(MODEL_DIR, "models", "backbone.tflite")
-EXPORT_DIR = os.path.join(MODEL_DIR, "export")
+PT_PATH    = os.path.join(MODEL_DIR, f"models_{TRAIN_MODE}", "backbone.pt")
+EXPORT_DIR = os.path.join(MODEL_DIR, f"export_{TRAIN_MODE}")
+OUT_TFLITE = os.path.join(EXPORT_DIR, "backbone.tflite")
 ASSETS_DIR = os.path.join(ROOT, "android_app", "B_authenticator_app",
-                           "app", "src", "main", "assets")
+                           "app", "src", "main", "assets", TRAIN_MODE)
 
 # ── helper ─────────────────────────────────────────────────────────────────
 def to_np(tensor):
@@ -221,5 +222,26 @@ for dest_name, src in COPY_LIST:
         print(f"    OK   {dest_name}")
     else:
         print(f"    SKIP (not found): {src}")
+
+# ── 7. Cập nhật export_manifest.json ───────────────────────────────────────
+import json, datetime
+manifest_path = os.path.join(ASSETS_DIR, "export_manifest.json")
+manifest = {}
+if os.path.exists(manifest_path):
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+
+manifest.update({
+    "model_file": "backbone.tflite",
+    "model_kind": f"backbone_encoder_{MODEL}",
+    "source_checkpoint": f"{MODEL}_v2 {TRAIN_MODE}",
+    "exported_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "export_pipeline_version": "v5-unified-tflite",
+    "context_mode": TRAIN_MODE
+})
+
+with open(manifest_path, "w", encoding="utf-8") as f:
+    json.dump(manifest, f, indent=2)
+print(f"    OK   export_manifest.json (updated)")
 
 print(f"\n=== Done [{MODEL}] -- rebuild app in Android Studio ===")

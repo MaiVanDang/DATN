@@ -19,10 +19,6 @@
     "user2",
     "user20",
     "user21",
-    "user22",
-    "user23",
-    "user24",
-    "user25",
     "user3",
     "user4",
     "user5",
@@ -33,7 +29,7 @@
   ],
   "touch_feat_dim": 48,
   "pool_size_inertial": 100,
-  "pool_size_touch": 92,
+  "pool_size_touch": 76,
   "framework": "pytorch",
   "note": "\u0110\u1ec3 deploy Android, convert backbone.pt \u2192 ONNX \u2192 TFLite"
 }

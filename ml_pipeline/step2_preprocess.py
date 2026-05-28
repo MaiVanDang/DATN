@@ -1,16 +1,3 @@
-"""
-step2_preprocess.py — tiền xử lý raw session data thành các array/CSV
-sẵn sàng cho training pipeline.
-
-Input  : ./data/<user>/<session_X>/*.csv  (sensor + touch raw)
-Output : ./processed/<user>/
-           X_walking.npy, y_walking.npy           — chỉ walking windows
-           X_inertial.npy, y_inertial.npy        — walking + sitting + standing
-           tap_gestures.csv, scroll_gestures.csv — gesture-level feature
-           touch_session_features.csv            — 48-D feature row / session
-
-Chạy: `python step2_preprocess.py`
-"""
 import sys
 import numpy as np
 import pandas as pd
@@ -18,10 +5,10 @@ from pathlib import Path
 
 # ── CONFIG ──────────────────────────────────────────────────────
 HZ          = 50
-WINDOW_SIZE = 4 * HZ          # 200 samples = 4 giây
-STRIDE      = 20              # ~80% overlap giữa các window
-MAX_GAP_SEC = 5 / HZ          # gap > 0.1s thì cắt segment
-BURST_THR   = 150             # inter-key < ngưỡng này (ms) xem là "burst"
+WINDOW_SIZE = 4 * HZ
+STRIDE      = 20
+MAX_GAP_SEC = 5 / HZ
+BURST_THR   = 150
 
 SENSOR_COLS = [
     "acc_x",  "acc_y",  "acc_z",
@@ -37,8 +24,6 @@ PROC_DIR = Path(__file__).parent / "processed"
 # IMU HELPERS
 # ════════════════════════════════════════════════════════════════
 def split_segments(df: pd.DataFrame) -> list[pd.DataFrame]:
-    """Tách DataFrame IMU thành các đoạn liên tục, bỏ gap > MAX_GAP_SEC.
-    Chỉ giữ segment có ≥ WINDOW_SIZE samples."""
     ts_col = "timestamp_ms" if "timestamp_ms" in df.columns else "timestamp_ns"
     to_sec = 1e3 if ts_col == "timestamp_ms" else 1e9
     df = df.sort_values(ts_col).reset_index(drop=True)
@@ -54,14 +39,12 @@ def split_segments(df: pd.DataFrame) -> list[pd.DataFrame]:
 
 
 def zscore_windows(X: np.ndarray, eps: float = 1e-8) -> np.ndarray:
-    """Per-window, per-channel z-score (mean=0, std=1 theo trục time)."""
     mean = X.mean(axis=1, keepdims=True)
     std  = X.std(axis=1, keepdims=True) + eps
     return (X - mean) / std
 
 
 def make_windows(df: pd.DataFrame, label: str):
-    """Sliding-window trên DataFrame IMU, trả (X, y) đã z-score."""
     df = df.dropna(subset=SENSOR_COLS)
     X_list = []
     for seg in split_segments(df):
@@ -75,14 +58,12 @@ def make_windows(df: pd.DataFrame, label: str):
 
 
 def pct5(arr):
-    """Trả (p25, median, p75) hoặc (nan, nan, nan) nếu < 2 phần tử."""
     if len(arr) < 2:
         return np.nan, np.nan, np.nan
     return float(np.percentile(arr, 25)), float(np.median(arr)), float(np.percentile(arr, 75))
 
 
 def stats5(arr, prefix: str) -> dict:
-    """5 thống kê cơ bản: mean / std / median / p25 / p75."""
     p25, med, p75 = pct5(arr)
     m  = float(np.mean(arr)) if len(arr) >= 2 else np.nan
     sd = float(np.std(arr))  if len(arr) >= 2 else np.nan
@@ -97,7 +78,6 @@ ACTIVITIES = ["walking", "sitting", "standing"]
 
 
 def _read_activity(sess_dir: Path, activity: str) -> pd.DataFrame | None:
-    """Đọc và gộp tất cả file <activity>_att*.csv của session."""
     dfs = []
     for f in sorted(sess_dir.glob(f"{activity}_att*.csv")):
         try:
@@ -108,7 +88,6 @@ def _read_activity(sess_dir: Path, activity: str) -> pd.DataFrame | None:
 
 
 def process_inertial(sess_dir: Path, label: str):
-    """Sinh 2 cặp window: walking-only và all-activities cho 1 session."""
     X_walk, y_walk = [], []
     X_all,  y_all  = [], []
     empty = np.empty((0, WINDOW_SIZE, len(SENSOR_COLS)), np.float64)
@@ -135,8 +114,6 @@ def process_inertial(sess_dir: Path, label: str):
 # TAP
 # ════════════════════════════════════════════════════════════════
 def process_tap(sess_dir: Path, session_id: str) -> pd.DataFrame:
-    """Ghép cặp DOWN→UP thành tap event, tính hold_ms + displacement.
-    Chỉ giữ tap có hold_ms ∈ [0, 500)."""
     rows = []
     for f in sorted(sess_dir.glob("tap_r*.csv")):
         try:
@@ -175,7 +152,6 @@ def process_tap(sess_dir: Path, session_id: str) -> pd.DataFrame:
 # SCROLL
 # ════════════════════════════════════════════════════════════════
 def _gesture_features(g: pd.DataFrame) -> dict | None:
-    """Trích 12 feature cho 1 scroll gesture đã sort theo timestamp_ms."""
     pts = g[["timestamp_ms", "x", "y"]].values.astype(float)
     if len(pts) < 2:
         return None
@@ -224,8 +200,6 @@ def _gesture_features(g: pd.DataFrame) -> dict | None:
 
 
 def process_scroll(sess_dir: Path, session_id: str) -> pd.DataFrame:
-    """Tái tạo các scroll gesture từ raw touch events.
-    Mỗi gesture: chuỗi DOWN→MOVE...→UP của cùng pointer, duration ∈ (10, 5000) ms."""
     gestures = []
     for f in sorted(sess_dir.glob("scroll_r*.csv")):
         try:
@@ -261,7 +235,6 @@ def process_scroll(sess_dir: Path, session_id: str) -> pd.DataFrame:
 # KEYSTROKE
 # ════════════════════════════════════════════════════════════════
 def process_keystroke(sess_dir: Path, session_id: str) -> pd.DataFrame:
-    """Đọc và gộp tất cả keystroke_r*.csv của session, gắn session_id."""
     dfs = []
     for f in sorted(sess_dir.glob("keystroke_r*.csv")):
         try:
@@ -323,7 +296,6 @@ def aggregate_touch(tap_df: pd.DataFrame, sc_df: pd.DataFrame,
         feat["scroll_dir_circmean"] = feat["scroll_dir_circstd"] = np.nan
 
     if len(sc) > 0:
-        # disp_x tái tạo từ direction + straight (cos θ = disp_x / straight)
         dy = sc["disp_y"].values
         dx = np.cos(sc["direction"].values) * sc["straight"].values
         n  = len(sc)
@@ -365,7 +337,6 @@ def aggregate_touch(tap_df: pd.DataFrame, sc_df: pd.DataFrame,
     return feat
 
 
-# Cố định thứ tự cột để match schema model expect
 TOUCH_COLS = [
     "session_id",
     "tap_n",
@@ -394,7 +365,6 @@ TOUCH_COLS = [
 # PER-USER PIPELINE
 # ════════════════════════════════════════════════════════════════
 def process_user(user_dir: Path):
-    """Chạy đầy đủ pipeline cho 1 user, lưu output ra ./processed/<user>/."""
     uid     = user_dir.name
     out_dir = PROC_DIR / uid
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -416,8 +386,8 @@ def process_user(user_dir: Path):
     touch_rows      = []
 
     for sess_dir in sessions:
-        sname = sess_dir.name                   # "session_1"
-        label = f"{uid}_{sname}"                # "user_xxx_session_1"
+        sname = sess_dir.name
+        label = f"{uid}_{sname}"
 
         (Xw, yw), (Xi, yi) = process_inertial(sess_dir, label)
         tap = process_tap     (sess_dir, sname)

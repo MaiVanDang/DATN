@@ -1,17 +1,3 @@
-"""
-step1_quality_check.py — kiểm tra chất lượng dữ liệu trước khi tiền xử lý.
-
-3 nhóm check cho mỗi user:
-  1. Thời lượng inertial (walking/standing/sitting) đạt target.
-  2. Số lượng touch gesture (tap/scroll/keystroke) đạt target.
-  3. Outlier session — session nào có touch behavior lệch hẳn các session
-     khác CỦA CÙNG USER (score ≥ OUTLIER_RATIO_THRESH × median user-score).
-
-Logic đếm + tách segment + sinh 48-D feature dùng trực tiếp functions
-của step2_preprocess.py để verdict step1 khớp với output step2.
-
-Yêu cầu: 2 file đặt cùng folder.
-"""
 from __future__ import annotations
 
 import numpy as np
@@ -26,26 +12,24 @@ from step2_preprocess import (
 )
 
 # ── CONFIG ──────────────────────────────────────────────────────
-MAX_GAP_SEC = 5 / HZ        # gap > 0.1s coi như đứt đoạn
+MAX_GAP_SEC = 5 / HZ
 
-INERTIAL_TARGET_MIN = {     # phút thu thực tế tối thiểu / activity / user
+INERTIAL_TARGET_MIN = {
     'walking':  18,
     'standing': 18,
     'sitting':  18,
 }
 
-TOUCH_TARGET = {            # số lượng tối thiểu / loại / user
+TOUCH_TARGET = {
     'tap':       600,
     'scroll':    600,
     'keystroke': 600,
 }
 
-# Outlier detection — robust scaling (median + MAD) per-user, không cần
-# scaler từ training. Phù hợp khi step1 chạy độc lập cho data mới.
-OUTLIER_RATIO_THRESH = 3.0     # score ≥ 3× median → outlier
-MIN_SESSIONS_FOR_Z   = 4       # < 4 session → skip check
-MAD_MIN              = 1e-6    # cột có MAD ≤ ngưỡng này coi như constant
-TOP_K_COLS           = 5       # số cột contribute lệch nhất in ra cho mỗi outlier
+OUTLIER_RATIO_THRESH = 3.0
+MIN_SESSIONS_FOR_Z   = 4
+MAD_MIN              = 1e-6
+TOP_K_COLS           = 5
 
 
 # ── FORMAT HELPERS ──────────────────────────────────────────────
@@ -143,19 +127,6 @@ def check_session(session_dir: Path) -> tuple[dict, dict, pd.DataFrame | None]:
 def detect_outlier_sessions(
     feat_table: pd.DataFrame,
 ) -> tuple[dict[str, dict], dict[str, float]]:
-    """Phát hiện session lệch hẳn các session khác của cùng user.
-
-    Quy trình:
-      1. Robust-scale 48 feature bằng median + MAD (per-column) trên toàn user.
-      2. Score per session = median khoảng cách Euclidean tới các session khác,
-         chuẩn hóa theo √n_features.
-      3. Flag session nếu score ≥ OUTLIER_RATIO_THRESH × median(score).
-
-    feat_table: DataFrame index = session_id, cột = 48 touch features.
-    Trả về:
-      outliers   = {session_id: {'score', 'ratio', 'top_cols'}}
-      all_scores = {session_id: score}
-    """
     outliers:   dict[str, dict]  = {}
     all_scores: dict[str, float] = {}
     n = len(feat_table)
@@ -201,7 +172,6 @@ def detect_outlier_sessions(
 
 # ── USER-LEVEL CHECK ────────────────────────────────────────────
 def check_user(user_dir: Path) -> bool:
-    """Chạy đủ 3 nhóm check cho 1 user. Trả True nếu đạt mọi tiêu chí."""
     print("\n" + "=" * 54)
     print(f"  USER: {user_dir.name}")
     print("=" * 54)

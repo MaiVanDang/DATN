@@ -6,8 +6,8 @@ enum class AuthState {
     UNKNOWN;
 
     companion object {
-        const val DEFAULT_TRUSTED_THRESHOLD = 0.75f
-        const val DEFAULT_WARNING_THRESHOLD = 0.45f
+        const val DEFAULT_TRUSTED_THRESHOLD = 0.5f
+        const val DEFAULT_WARNING_THRESHOLD = 0.3f
 
         fun fromScore(
             score: Float,
