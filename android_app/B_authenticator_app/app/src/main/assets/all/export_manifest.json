@@ -16,9 +16,9 @@
   ],
   "output_kind": "embedding",
   "output_dtype": "float32",
-  "decision_threshold_eer": 0.5,
-  "warning_threshold": 0.45,
-  "trusted_threshold": 0.75,
+  "decision_threshold_eer": 0.8714,
+  "warning_threshold": 0.82,
+  "trusted_threshold": 0.88,
   "score_aggregator_alpha": 0.8,
   "score_aggregator_window": 5,
   "score_method": "cosine_similarity_to_owner_anchors",
@@ -27,6 +27,7 @@
   "sigmoid_bias": 0.3,
   "context_mode": "all",
   "source_checkpoint": "cnn_v2 all",
-  "exported_at": "2026-05-26T18:16:43Z",
-  "export_pipeline_version": "v5-unified-tflite"
+  "exported_at": "2026-05-29T19:19:14Z",
+  "export_pipeline_version": "v5-unified-tflite",
+  "eval_protocol": "open_set_session_disjoint_cosine_ewma"
 }

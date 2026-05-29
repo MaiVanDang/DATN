@@ -63,7 +63,7 @@ enum class ContextMode(val key: String, val assetFolder: String) {
 
         /**
          * Helper để build path `assets/<mode>/<filename>`.
-         * Dùng trong InferenceEngine và TouchEnrollActivity.
+         * Dùng trong InferenceEngine.
          */
         fun assetPath(mode: ContextMode, filename: String): String =
             "${mode.assetFolder}/$filename"

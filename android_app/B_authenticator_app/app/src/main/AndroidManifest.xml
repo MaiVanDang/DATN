@@ -60,12 +60,6 @@
             android:exported="false"
             android:label="@string/enroll_owner_title" />
 
-        <!-- Touch behaviour enrollment — guided tap/scroll/keystroke + RF training -->
-        <activity
-            android:name=".ui.TouchEnrollActivity"
-            android:exported="false"
-            android:label="Đăng ký hành vi chạm" />
-
         <!-- Shake-pattern enrollment — runs between touch enrollment and quiz -->
         <activity
             android:name=".ui.FallbackEnrollActivity"

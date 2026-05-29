@@ -1,6 +1,7 @@
 package com.datn.authenticator.fallback
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.os.CountDownTimer
@@ -10,6 +11,11 @@ import android.widget.TextView
 import com.datn.authenticator.R
 import com.datn.authenticator.service.AuthenticationService
 
+/**
+ * Màn hình fallback khi nghi ngờ người lạ: yêu cầu nhập lại DÃY LẮC bí mật.
+ * Tái sử dụng layout activity_fallback (các view id giữ nguyên); ô counter
+ * giờ hiển thị dãy chữ số đang nhập, ví dụ "3 - 1 - 4".
+ */
 class FallbackActivity : Activity() {
     private lateinit var titleText: TextView
     private lateinit var statusText: TextView
@@ -26,11 +32,10 @@ class FallbackActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         window.addFlags(
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
         )
         setContentView(R.layout.activity_fallback)
 
@@ -42,85 +47,72 @@ class FallbackActivity : Activity() {
         cancelButton = findViewById(R.id.btnCancel)
 
         storage = PatternStorage(this)
-        shakeDetector = ShakeDetector(this, onCountUpdated = { count ->
-            runOnUiThread { counterText.text = getString(R.string.fallback_counter, count) }
-        })
+        shakeDetector = ShakeDetector(
+            this,
+            onDigitsUpdated = { seq -> runOnUiThread { counterText.text = format(seq) } },
+            onShake = { b -> runOnUiThread { counterText.text = "${currentPrefix()}${b}…" } },
+        )
 
         if (!storage.isEnrolled()) {
-            statusText.text = getString(R.string.fallback_not_enrolled)
+            statusText.text = "Chưa đăng ký mẫu lắc."
             startButton.isEnabled = false
             return
         }
-
         if (storage.failedAttempts() >= PatternStorage.MAX_FAILED_ATTEMPTS) {
-            statusText.text = getString(R.string.fallback_max_failed)
+            statusText.text = "Đã khoá: vượt số lần thử cho phép."
             startButton.isEnabled = false
             return
         }
 
-        startButton.setOnClickListener { startShakeCapture() }
-        doneButton.setOnClickListener { finishShakeCapture(timedOut = false) }
+        statusText.text = "Nhập lại dãy lắc bí mật (${storage.registeredLength()} chữ số)."
+        startButton.setOnClickListener { startCapture() }
+        doneButton.setOnClickListener { finishCapture(timedOut = false) }
         cancelButton.setOnClickListener { finish() }
         doneButton.isEnabled = false
     }
 
     override fun onDestroy() {
-        countdown?.cancel()
-        shakeDetector.shutdown()
-        super.onDestroy()
+        countdown?.cancel(); shakeDetector.shutdown(); super.onDestroy()
     }
 
-    override fun onBackPressed() {
-        if (!shakingActive) super.onBackPressed()
-    }
+    override fun onBackPressed() { if (!shakingActive) super.onBackPressed() }
 
-    private fun startShakeCapture() {
+    private fun startCapture() {
         shakingActive = true
         startButton.isEnabled = false
         doneButton.isEnabled = true
         cancelButton.isEnabled = false
-        statusText.text = getString(R.string.fallback_shake_now)
-        counterText.text = getString(R.string.fallback_counter, 0)
-
-        shakeDetector.start(maxDurationMs = ShakeDetector.DEFAULT_TIMEOUT_MS)
+        statusText.text = "Lắc theo dãy của bạn: mỗi chữ số là số lần lắc, dừng ~1s để sang chữ số kế."
+        counterText.text = "—"
+        shakeDetector.start(ShakeDetector.DEFAULT_TIMEOUT_MS)
 
         countdown?.cancel()
         countdown = object : CountDownTimer(ShakeDetector.DEFAULT_TIMEOUT_MS, 1000L) {
-            override fun onTick(remaining: Long) {
-                titleText.text = getString(R.string.fallback_title_with_remaining, remaining / 1000)
-            }
-
-            override fun onFinish() {
-                if (shakingActive) finishShakeCapture(timedOut = true)
-            }
+            override fun onTick(remaining: Long) { titleText.text = "Còn ${remaining / 1000}s" }
+            override fun onFinish() { if (shakingActive) finishCapture(timedOut = true) }
         }.start()
     }
 
-    private fun finishShakeCapture(timedOut: Boolean) {
+    private fun finishCapture(timedOut: Boolean) {
         if (!shakingActive) return
         shakingActive = false
         countdown?.cancel()
-        val observedCount = shakeDetector.stop()
-        val passed = storage.verify(observedCount)
+        val observed = shakeDetector.stop()
+        counterText.text = format(observed)
 
-        if (passed) {
+        if (storage.verify(observed)) {
             storage.resetFailedAttempts()
-
             AuthenticationService.instance?.onFallbackVerified()
-            statusText.text = getString(R.string.fallback_pass, observedCount)
+            statusText.text = "Xác thực thành công."
             setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_VERIFIED, true))
             finishWithDelay()
         } else {
-            val failedCount = storage.recordFailedAttempt()
-            statusText.text = if (timedOut) {
-                getString(R.string.fallback_fail_timeout, observedCount, failedCount)
-            } else {
-                getString(R.string.fallback_fail_count, observedCount, failedCount)
-            }
-            counterText.text = getString(R.string.fallback_counter, observedCount)
-            if (failedCount >= PatternStorage.MAX_FAILED_ATTEMPTS) {
+            val failed = storage.recordFailedAttempt()
+            statusText.text = (if (timedOut) "Hết giờ. " else "Sai dãy. ") +
+                "Nhập: ${format(observed)} (lần thử $failed/${PatternStorage.MAX_FAILED_ATTEMPTS})"
+            if (failed >= PatternStorage.MAX_FAILED_ATTEMPTS) {
                 AuthenticationService.instance?.onFallbackMaxFailed()
-                statusText.append("\n" + getString(R.string.fallback_max_failed))
+                statusText.append("\nĐã khoá — yêu cầu PIN hệ thống.")
                 setResult(Activity.RESULT_CANCELED)
                 finishWithDelay()
             } else {
@@ -131,18 +123,22 @@ class FallbackActivity : Activity() {
         }
     }
 
-    private fun finishWithDelay() {
-        startButton.postDelayed({ if (!isFinishing) finish() }, 1500L)
+    private fun currentPrefix(): String {
+        val s = shakeDetector.currentSequence()
+        return if (s.isEmpty()) "" else s.joinToString(" - ") + " - "
     }
+
+    private fun format(seq: List<Int>): String =
+        if (seq.isEmpty()) "—" else seq.joinToString(" - ")
+
+    private fun finishWithDelay() =
+        startButton.postDelayed({ if (!isFinishing) finish() }, 1500L)
 
     companion object {
         const val EXTRA_VERIFIED = "verified"
-
-        fun launch(context: android.content.Context) {
-            val intent = Intent(context, FallbackActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(intent)
+        fun launch(context: Context) {
+            context.startActivity(Intent(context, FallbackActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
     }
 }

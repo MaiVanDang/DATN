@@ -13,7 +13,7 @@ import numpy as np
 # ══════════════════════════════════════════════════════════
 #   CHỌN MODEL Ở ĐÂY
 MODEL = "cnn"          # "cnn"  |  "convlstm"  |  "convlstm_bi"
-TRAIN_MODE = "all" # "walking" | "all"
+TRAIN_MODE = "walking" # "walking" | "all"
 # ══════════════════════════════════════════════════════════
 
 assert MODEL in ("cnn", "convlstm", "convlstm_bi"), f"Unknown model: {MODEL}"

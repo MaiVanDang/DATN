@@ -1,70 +1,106 @@
 package com.datn.authenticator.fallback
 
 import android.content.Context
+import android.util.Base64
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import kotlin.math.abs
+import java.security.MessageDigest
+import java.security.SecureRandom
 
+/**
+ * Lưu "mật khẩu lắc" dạng DÃY CHỮ SỐ (mỗi chữ số 1..9, độ dài 4..8) — thay
+ * cho phiên bản cũ chỉ lưu một số đếm lắc duy nhất (entropy ~ vài chục).
+ *
+ * Mỗi chữ số = số lần lắc trong một "cụm" (burst); các chữ số cách nhau bằng
+ * một quãng dừng (xem [ShakeDetector]). Ví dụ dãy [3,1,4]: lắc 3 lần → dừng →
+ * 1 lần → dừng → 4 lần.
+ *
+ * Bảo mật: KHÔNG lưu dãy số thô. Lưu salt ngẫu nhiên + SHA-256(salt || dãy).
+ * Khi verify, băm lại và so khớp tuyệt đối (burst-count ổn định hơn tổng số
+ * lắc nên không cần tolerance — vừa chính xác vừa an toàn hơn).
+ *
+ * Entropy ≈ 9^L (L=độ dài): L=4 → 6561 tổ hợp, L=6 → ~531k — so với ~20 của
+ * bản cũ. Vẫn nên giữ tuỳ chọn PIN hệ điều hành làm fallback cuối.
+ */
 class PatternStorage(context: Context) {
-    private val prefs: android.content.SharedPreferences = try {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+
+    private val prefs = try {
+        val key = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
         EncryptedSharedPreferences.create(
-            context,
-            PREFS_NAME,
-            masterKey,
+            context, PREFS_NAME, key,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
     } catch (e: Exception) {
-        Log.w(TAG, "EncryptedSharedPreferences unavailable; falling back to plain prefs. ${e.message}")
+        Log.w(TAG, "EncryptedSharedPreferences unavailable: ${e.message}")
         context.getSharedPreferences(PREFS_NAME + "_fallback", Context.MODE_PRIVATE)
     }
 
-    fun isEnrolled(): Boolean = prefs.contains(KEY_SHAKE_COUNT)
+    fun isEnrolled(): Boolean = prefs.contains(KEY_HASH) && prefs.contains(KEY_SALT)
 
-    fun savePattern(shakeCount: Int) {
-        require(shakeCount in 1..20) { "shakeCount must be 1..20, got $shakeCount" }
-        prefs.edit().apply {
-            putInt(KEY_SHAKE_COUNT, shakeCount)
-            putLong(KEY_ENROLLED_AT, System.currentTimeMillis())
-            putInt(KEY_FAILED_ATTEMPTS, 0)
-        }.apply()
+    /** Lưu dãy chữ số. Ném lỗi nếu độ dài hoặc chữ số không hợp lệ. */
+    fun savePattern(sequence: List<Int>) {
+        validate(sequence)
+        val salt = ByteArray(SALT_LEN).also { SecureRandom().nextBytes(it) }
+        val hash = hash(salt, sequence)
+        prefs.edit()
+            .putString(KEY_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
+            .putString(KEY_HASH, Base64.encodeToString(hash, Base64.NO_WRAP))
+            .putInt(KEY_LEN, sequence.size)
+            .putLong(KEY_ENROLLED_AT, System.currentTimeMillis())
+            .putInt(KEY_FAILED_ATTEMPTS, 0)
+            .apply()
     }
 
-    fun registeredShakeCount(): Int? =
-        if (prefs.contains(KEY_SHAKE_COUNT)) prefs.getInt(KEY_SHAKE_COUNT, -1) else null
+    /** Độ dài dãy đã đăng ký (để UI hiển thị "cần nhập N chữ số"). */
+    fun registeredLength(): Int = prefs.getInt(KEY_LEN, 0)
+
+    fun verify(observed: List<Int>): Boolean {
+        if (!isEnrolled()) return false
+        if (observed.size != registeredLength()) return false
+        val salt = Base64.decode(prefs.getString(KEY_SALT, null) ?: return false, Base64.NO_WRAP)
+        val expected = Base64.decode(prefs.getString(KEY_HASH, null) ?: return false, Base64.NO_WRAP)
+        return MessageDigest.isEqual(hash(salt, observed), expected)
+    }
 
     fun failedAttempts(): Int = prefs.getInt(KEY_FAILED_ATTEMPTS, 0)
+    fun recordFailedAttempt(): Int =
+        (failedAttempts() + 1).also { prefs.edit().putInt(KEY_FAILED_ATTEMPTS, it).apply() }
+    fun resetFailedAttempts() = prefs.edit().putInt(KEY_FAILED_ATTEMPTS, 0).apply()
+    fun clear() = prefs.edit().clear().apply()
 
-    fun recordFailedAttempt(): Int {
-        val n = failedAttempts() + 1
-        prefs.edit().putInt(KEY_FAILED_ATTEMPTS, n).apply()
-        return n
-    }
-
-    fun resetFailedAttempts() {
-        prefs.edit().putInt(KEY_FAILED_ATTEMPTS, 0).apply()
-    }
-
-    fun clear() {
-        prefs.edit().clear().apply()
-    }
-
-    fun verify(observedCount: Int, tolerance: Int = ShakeDetector.SHAKE_TOLERANCE): Boolean {
-        val expected = registeredShakeCount() ?: return false
-        return abs(observedCount - expected) <= tolerance
+    private fun hash(salt: ByteArray, seq: List<Int>): ByteArray {
+        val md = MessageDigest.getInstance("SHA-256")
+        md.update(salt)
+        md.update(seq.joinToString(",").toByteArray(Charsets.UTF_8))
+        return md.digest()
     }
 
     companion object {
         private const val TAG = "PatternStorage"
         private const val PREFS_NAME = "shake_pattern_secure"
-        private const val KEY_SHAKE_COUNT = "shake_count"
+        private const val KEY_SALT = "salt"
+        private const val KEY_HASH = "hash"
+        private const val KEY_LEN  = "seq_len"
         private const val KEY_ENROLLED_AT = "enrolled_at"
         private const val KEY_FAILED_ATTEMPTS = "failed_attempts"
+        private const val SALT_LEN = 16
 
         const val MAX_FAILED_ATTEMPTS = 3
+        const val MIN_DIGITS = 4
+        const val MAX_DIGITS = 8
+        const val MIN_DIGIT_VALUE = 1
+        const val MAX_DIGIT_VALUE = 9
+
+        fun validate(seq: List<Int>) {
+            require(seq.size in MIN_DIGITS..MAX_DIGITS) {
+                "Độ dài dãy phải $MIN_DIGITS..$MAX_DIGITS, nhận ${seq.size}"
+            }
+            require(seq.all { it in MIN_DIGIT_VALUE..MAX_DIGIT_VALUE }) {
+                "Mỗi chữ số phải $MIN_DIGIT_VALUE..$MAX_DIGIT_VALUE"
+            }
+        }
     }
 }

@@ -31,7 +31,6 @@ class ModeSelectActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Nếu user đã chọn mode + đã enroll IMU thì bypass màn này
         val savedMode = ContextMode.loadSaved(this)
         val ownerProfile = OwnerProfile(this)
         if (savedMode != null && ownerProfile.hasEnrollment()) {
@@ -88,7 +87,6 @@ class ModeSelectActivity : AppCompatActivity() {
     }
 
     private fun confirmAndContinue(mode: ContextMode) {
-        // Nếu đã có profile (từ mode khác) — cảnh báo phải xóa
         val ownerProfile = OwnerProfile(this)
         if (ownerProfile.hasEnrollment()) {
             AlertDialog.Builder(this)

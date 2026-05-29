@@ -13,15 +13,12 @@ import com.datn.authenticator.fallback.ShakeDetector
 import com.datn.authenticator.service.AuthenticationService
 
 /**
- * Đăng ký "chữ ký lắc" cá nhân.
- *
- * Hệ thống đo cách user lắc điện thoại trong 3 trial độc lập, lấy trung vị
- * số lần lắc làm baseline. Khi fallback, user phải lắc xấp xỉ đúng số lần đó
- * (±[ShakeDetector.SHAKE_TOLERANCE]). Đây là tín hiệu sinh trắc nhẹ — dựa
- * trên nhịp/biên độ lắc tự nhiên của user, không phải mật khẩu user nhớ.
+ * Đăng ký "mật khẩu lắc" dạng DÃY CHỮ SỐ (mỗi chữ số = số lần lắc trong 1 cụm,
+ * dừng ~1s để sang chữ số kế). Nhập 2 lần phải KHỚP thì mới lưu — tránh sai
+ * do nhịp lắc. Lưu băm SHA-256, không lưu dãy thô.
  */
 class FallbackEnrollActivity : AppCompatActivity() {
-    private lateinit var tvTrialStatus: TextView
+    private lateinit var tvStatus: TextView
     private lateinit var tvCounter: TextView
     private lateinit var btnShake: Button
     private lateinit var progressBar: ProgressBar
@@ -29,85 +26,82 @@ class FallbackEnrollActivity : AppCompatActivity() {
     private lateinit var shakeDetector: ShakeDetector
     private lateinit var storage: PatternStorage
 
-    private val trialCounts = mutableListOf<Int>()
-    private var currentTrial = 0
+    private var firstEntry: List<Int>? = null
     private var shaking = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_fallback_enroll)
-
         AuthenticationService.stop(this)
 
-        tvTrialStatus = findViewById(R.id.feTrialStatus)
-        tvCounter     = findViewById(R.id.feCounter)
-        btnShake      = findViewById(R.id.feBtnShake)
-        progressBar   = findViewById(R.id.feProgress)
+        tvStatus    = findViewById(R.id.feTrialStatus)
+        tvCounter   = findViewById(R.id.feCounter)
+        btnShake    = findViewById(R.id.feBtnShake)
+        progressBar = findViewById(R.id.feProgress)
 
         storage = PatternStorage(this)
-        shakeDetector = ShakeDetector(this, onCountUpdated = { count ->
-            runOnUiThread {
-                tvCounter.text = count.toString()
-                btnShake.text  = "Xong lắc  ($count lần)"
-            }
-        })
+        shakeDetector = ShakeDetector(
+            this,
+            onDigitsUpdated = { seq -> runOnUiThread { tvCounter.text = format(seq) } },
+            onShake = { b -> runOnUiThread { tvCounter.text = "${prefix()}${b}…" } },
+        )
 
-        progressBar.max = TOTAL_TRIALS
+        progressBar.max = 2
         progressBar.progress = 0
-
-        btnShake.setOnClickListener {
-            if (!shaking) startTrial() else finishTrial()
-        }
+        tvStatus.text = "Đặt mật khẩu lắc: ${PatternStorage.MIN_DIGITS}–${PatternStorage.MAX_DIGITS} chữ số. " +
+            "Mỗi chữ số là số lần lắc liên tiếp (1–9), dừng ~1s để sang chữ số kế."
+        btnShake.text = "Bắt đầu lắc"
+        btnShake.setOnClickListener { if (!shaking) startEntry() else finishEntry() }
     }
 
-    override fun onDestroy() {
-        shakeDetector.shutdown()
-        super.onDestroy()
-    }
+    override fun onDestroy() { shakeDetector.shutdown(); super.onDestroy() }
 
-    private fun startTrial() {
+    private fun startEntry() {
         shaking = true
-        tvCounter.text = "0"
-        tvTrialStatus.text = "Lần ${currentTrial + 1} / $TOTAL_TRIALS — lắc theo nhịp của bạn, rồi bấm 'Xong lắc'."
-        btnShake.text = "Xong lắc  (0 lần)"
-
-        shakeDetector.start(MAX_TRIAL_DURATION_MS)
+        tvCounter.text = "—"
+        tvStatus.text = if (firstEntry == null) "Lần 1: lắc dãy của bạn rồi bấm 'Xong'."
+                        else "Lần 2: lắc lại ĐÚNG dãy đó để xác nhận."
+        btnShake.text = "Xong"
+        shakeDetector.start(ShakeDetector.DEFAULT_TIMEOUT_MS)
     }
 
-    private fun finishTrial() {
+    private fun finishEntry() {
         if (!shaking) return
         shaking = false
-        val count = shakeDetector.stop()
-        trialCounts.add(count)
-        currentTrial++
-        progressBar.progress = currentTrial
+        val seq = shakeDetector.stop()
+        btnShake.text = "Bắt đầu lắc"
 
-        if (currentTrial >= TOTAL_TRIALS) {
-            saveAndProceed()
+        try { PatternStorage.validate(seq) } catch (e: Exception) {
+            tvStatus.text = "Dãy không hợp lệ: ${e.message}. Thử lại."
+            firstEntry = null; progressBar.progress = 0
+            return
+        }
+
+        if (firstEntry == null) {
+            firstEntry = seq
+            progressBar.progress = 1
+            tvStatus.text = "Đã ghi lần 1: ${format(seq)}. Bấm để nhập lại xác nhận."
+        } else if (firstEntry == seq) {
+            storage.savePattern(seq)
+            progressBar.progress = 2
+            tvStatus.text = "Đã lưu mật khẩu lắc (${seq.size} chữ số)."
+            tvCounter.text = format(seq)
+            btnShake.isEnabled = false
+            Toast.makeText(this, "Đăng ký thành công", Toast.LENGTH_SHORT).show()
+            btnShake.postDelayed({
+                startActivity(Intent(this, QuizActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                })
+            }, 1200L)
         } else {
-            btnShake.text = "Bắt đầu lắc"
-            tvTrialStatus.text = "Lần $currentTrial xong (đếm: $count). Còn ${TOTAL_TRIALS - currentTrial} lần."
+            tvStatus.text = "Hai lần không khớp (${format(firstEntry!!)} ≠ ${format(seq)}). Làm lại từ đầu."
+            firstEntry = null; progressBar.progress = 0
         }
     }
 
-    private fun saveAndProceed() {
-        val sorted = trialCounts.sorted()
-        val median = sorted[sorted.size / 2]
-        storage.savePattern(median)
-        tvTrialStatus.text = "Đã lưu chữ ký lắc = $median lần (trung vị $TOTAL_TRIALS lần thử)."
-        tvCounter.text = median.toString()
-        btnShake.text = "Hoàn tất"
-        btnShake.isEnabled = false
-        Toast.makeText(this, "Đã đăng ký mẫu lắc ($median lần)", Toast.LENGTH_SHORT).show()
-        btnShake.postDelayed({
-            startActivity(Intent(this, QuizActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            })
-        }, 1200L)
+    private fun prefix(): String {
+        val s = shakeDetector.currentSequence()
+        return if (s.isEmpty()) "" else s.joinToString(" - ") + " - "
     }
-
-    companion object {
-        private const val TOTAL_TRIALS = 3
-        private const val MAX_TRIAL_DURATION_MS = 5 * 60 * 1000L
-    }
+    private fun format(seq: List<Int>) = if (seq.isEmpty()) "—" else seq.joinToString(" - ")
 }

@@ -6,7 +6,6 @@ import android.os.Handler
 import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
-import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
@@ -19,7 +18,6 @@ import androidx.core.content.ContextCompat
 import com.datn.authenticator.R
 import com.datn.authenticator.fallback.PatternStorage
 import com.datn.authenticator.inference.OwnerProfile
-import com.datn.authenticator.inference.TouchCollector
 import com.datn.authenticator.model.AuthState
 import com.datn.authenticator.service.AuthenticationService
 
@@ -51,12 +49,6 @@ class QuizActivity : AppCompatActivity() {
         }
     }
 
-    private val keyStatsRunnable = object : Runnable {
-        override fun run() {
-            tvKeyStats.text = "Tap: ${TouchCollector.tapCount()}  |  Cuộn: ${TouchCollector.scrollCount()}  |  Phím: ${TouchCollector.keyCount()}"
-            uiHandler.postDelayed(this, 500L)
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,6 +67,7 @@ class QuizActivity : AppCompatActivity() {
         tvResult      = findViewById(R.id.quizTvResult)
         etNotes       = findViewById(R.id.quizEtNotes)
         tvKeyStats    = findViewById(R.id.quizTvKeyStats)
+        tvKeyStats.text = "Đang xác thực bằng cảm biến chuyển động"
         btnReenroll   = findViewById(R.id.quizBtnReenroll)
 
         etNotes.addTextChangedListener(object : TextWatcher {
@@ -83,7 +76,6 @@ class QuizActivity : AppCompatActivity() {
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
                 val newLen = s?.length ?: 0
-                TouchCollector.onKeyInserted(newLen < prevLen)
                 prevLen = newLen
             }
         })
@@ -102,22 +94,16 @@ class QuizActivity : AppCompatActivity() {
         loadQuestion(0)
     }
 
-    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        TouchCollector.onTouchEvent(ev)
-        return super.dispatchTouchEvent(ev)
-    }
 
     override fun onResume() {
         super.onResume()
         AuthenticationService.start(this)
         uiHandler.post(statusRunnable)
-        uiHandler.post(keyStatsRunnable)
     }
 
     override fun onPause() {
         super.onPause()
         uiHandler.removeCallbacks(statusRunnable)
-        uiHandler.removeCallbacks(keyStatsRunnable)
     }
 
     private fun updateAuthStatus() {

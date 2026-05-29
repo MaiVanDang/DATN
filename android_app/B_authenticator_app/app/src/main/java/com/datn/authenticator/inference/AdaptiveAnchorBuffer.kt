@@ -14,8 +14,8 @@ class AdaptiveAnchorBuffer(
     private val maxAdaptive: Int    = 20,
     private val adaptThreshold: Float = 0.92f,
     private val requiredStreak: Int = 5,
-    private val cooldownMs: Long    = 5 * 60_000L,    // sau fallback
-    private val rateLimitMs: Long   = 5 * 60_000L,    // giữa các add
+    private val cooldownMs: Long    = 5 * 60_000L,
+    private val rateLimitMs: Long   = 5 * 60_000L,
 ) {
     private val file: File = File(context.filesDir, FILE_NAME)
     private val pool = ArrayDeque<TimedAnchor>()

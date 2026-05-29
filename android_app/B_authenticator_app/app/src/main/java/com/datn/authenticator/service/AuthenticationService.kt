@@ -22,8 +22,10 @@ import com.datn.authenticator.fallback.FallbackActivity
 import com.datn.authenticator.inference.InferenceEngine
 import com.datn.authenticator.inference.ScoreAggregator
 import com.datn.authenticator.inference.SensorWindowCollector
-import com.datn.authenticator.inference.TouchCollector
 import com.datn.authenticator.model.AuthState
+import com.datn.authenticator.model.SensorWindow
+import com.datn.authenticator.model.ExportManifest
+import com.datn.authenticator.util.ContextMode
 import com.datn.authenticator.ui.QuizActivity
 import com.datn.authenticator.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
@@ -45,8 +47,7 @@ class AuthenticationService : Service() {
 
     private lateinit var collector: SensorWindowCollector
     private var inferenceEngine: InferenceEngine? = null
-    private val aggregator = ScoreAggregator()
-    private var touchScaler: Pair<FloatArray, FloatArray>? = null
+    private var aggregator = ScoreAggregator()
 
     private lateinit var sensorManager: SensorManager
     private var significantMotionSensor: Sensor? = null
@@ -86,14 +87,28 @@ class AuthenticationService : Service() {
         super.onCreate()
         Log.i(TAG, "AuthenticationService onCreate")
 
-        TouchCollector.resetSession()
 
         promoteToForeground(AuthState.TRUSTED, 0.5f)
 
         collector = SensorWindowCollector(this)
         inferenceEngine = InferenceEngine.load(this)
-        touchScaler = InferenceEngine.loadTouchScaler(this)
-        Log.i(TAG, "InferenceEngine ready: backend=${inferenceEngine?.backend}, mock=${inferenceEngine?.isMockMode}, touchScaler=${touchScaler != null}")
+
+        val mode = ContextMode.loadOrDefault(this)
+        val manifest = ExportManifest.loadFromAssets(this, ContextMode.assetPath(mode, "export_manifest.json"))
+        if (manifest != null) {
+            aggregator = ScoreAggregator(
+                windowSize = manifest.scoreAggregatorWindow,
+                alpha = manifest.scoreAggregatorAlpha,
+                trustedThreshold = manifest.trustedThreshold,
+                warningThreshold = manifest.warningThreshold,
+            )
+            Log.i(TAG, "Aggregator từ manifest: trusted=${manifest.trustedThreshold} " +
+                    "warning=${manifest.warningThreshold} alpha=${manifest.scoreAggregatorAlpha} " +
+                    "window=${manifest.scoreAggregatorWindow}")
+        } else {
+            Log.w(TAG, "Không đọc được manifest — dùng ngưỡng mặc định")
+        }
+        Log.i(TAG, "InferenceEngine ready: backend=${inferenceEngine?.backend}, mock=${inferenceEngine?.isMockMode}")
 
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         significantMotionSensor = sensorManager.getDefaultSensor(Sensor.TYPE_SIGNIFICANT_MOTION)
@@ -188,17 +203,18 @@ class AuthenticationService : Service() {
 
             val engine = inferenceEngine ?: continue
 
-            val touchVec = TouchCollector.buildFeatureVector()
+            if (!hasEnoughMotion(window)) {
+                Log.d(TAG, "[$reason] motion gate: cửa sổ tĩnh (để bàn/bất động) -> bỏ qua, giữ trạng thái")
+                continue
+            }
 
-            val fused = engine.predictFused(window, touchVec, touchScaler)
+            val fused = engine.predictFused(window)
             val result = fused.inertial
             val scoreToAggregate = fused.fusedScore
             val newScore = aggregator.push(scoreToAggregate)
             val newState = aggregator.currentState()
 
             Log.i(TAG, "[$reason] p_inertial=${"%.3f".format(result.probabilityLegitimate)} " +
-                    "p_touch=${fused.pTouch?.let { "%.3f".format(it) } ?: "n/a"} " +
-                    "fused=${"%.3f".format(fused.fusedScore)} w=${"%.2f".format(fused.fusionW)} " +
                     "S=${"%.3f".format(newScore)} state=$newState " +
                     "lat=${"%.1f".format(result.totalLatencyMs)}ms")
 
@@ -320,6 +336,29 @@ class AuthenticationService : Service() {
 
     private fun formatPct(v: Float) = "${(v * 100).toInt()}%"
 
+    /**
+     * Cổng phát hiện cử động: tính phương sai độ lớn gia tốc RAW của cửa sổ
+     * (window.data CHƯA z-score). Máy để bàn/bất động → phương sai rất thấp →
+     * trả false để BỎ QUA, tránh chấm điểm trên nhiễu (z-score khuếch đại
+     * cửa sổ phẳng thành ngẫu nhiên). Ngưỡng theo (m/s^2)^2.
+     */
+    private fun hasEnoughMotion(window: SensorWindow): Boolean {
+        val n = SensorWindow.TIMESTEPS
+        val ch = SensorWindow.CHANNELS
+        var sum = 0.0
+        var sumSq = 0.0
+        for (t in 0 until n) {
+            val ax = window.data[t * ch + SensorWindow.CH_ACC_X]
+            val ay = window.data[t * ch + SensorWindow.CH_ACC_Y]
+            val az = window.data[t * ch + SensorWindow.CH_ACC_Z]
+            val mag = kotlin.math.sqrt((ax * ax + ay * ay + az * az).toDouble())
+            sum += mag; sumSq += mag * mag
+        }
+        val mean = sum / n
+        val variance = sumSq / n - mean * mean
+        return variance >= MOTION_VAR_THRESHOLD
+    }
+
     companion object {
         private const val TAG = "${AuthenticatorApp.TAG}/Service"
 
@@ -328,6 +367,8 @@ class AuthenticationService : Service() {
         private const val PERIODIC_CAPTURE_INTERVAL_MS = 4_000L
         private const val WARNING_TIMEOUT_MS = 15_000L
         private const val FALLBACK_GRACE_MS = 30_000L
+
+        private const val MOTION_VAR_THRESHOLD = 0.15
 
         @Volatile
         var instance: AuthenticationService? = null

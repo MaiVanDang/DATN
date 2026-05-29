@@ -12,7 +12,9 @@ import androidx.lifecycle.lifecycleScope
 import com.datn.authenticator.R
 import com.datn.authenticator.fallback.PatternStorage
 import com.datn.authenticator.inference.InferenceEngine
+import com.datn.authenticator.inference.NpyReader
 import com.datn.authenticator.inference.OwnerProfile
+import com.datn.authenticator.inference.RandomForestClassifier
 import com.datn.authenticator.inference.SensorWindowCollector
 import com.datn.authenticator.service.AuthenticationService
 import com.datn.authenticator.util.ContextMode
@@ -38,7 +40,6 @@ class OwnerEnrollmentActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Mode phải được chọn trước. Nếu chưa, đẩy về ModeSelectActivity.
         if (ContextMode.loadSaved(this) == null) {
             startActivity(Intent(this, ModeSelectActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -56,9 +57,6 @@ class OwnerEnrollmentActivity : AppCompatActivity() {
                 }
                 ownerProfile.getRfInertial()?.isTrained == true -> {
                     goToFallbackEnroll(); return
-                }
-                else -> {
-                    goToTouchEnroll(); return
                 }
             }
         }
@@ -119,9 +117,12 @@ class OwnerEnrollmentActivity : AppCompatActivity() {
                 }
 
                 status.text = "Đã thu xong ${anchors.size} mẫu IMU. Đang lưu..."
-                withContext(Dispatchers.Default) { ownerProfile.saveAnchors(anchors) }
-                toast("IMU enrollment xong! Tiếp theo: đăng ký hành vi chạm.")
-                goToTouchEnroll()
+                val rfInertial = withContext(Dispatchers.Default) { trainRfInertial(anchors) }
+                withContext(Dispatchers.Default) {
+                    ownerProfile.save(anchors, rfInertial, null, 1f)
+                }
+                toast("Enrollment xong! Tiếp theo: đăng ký mẫu lắc.")
+                goToFallbackEnroll()
             } catch (e: Exception) {
                 status.text = getString(R.string.enroll_owner_error, e.message ?: "?")
                 resetUi()
@@ -133,10 +134,26 @@ class OwnerEnrollmentActivity : AppCompatActivity() {
         }
     }
 
-    private fun goToTouchEnroll() {
-        startActivity(Intent(this, TouchEnrollActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        })
+    private fun trainRfInertial(anchors: List<FloatArray>): RandomForestClassifier {
+        val mode = ContextMode.loadOrDefault(this)
+        val poolPath = ContextMode.assetPath(mode, "impostor_pool_inertial.npy")
+        val poolRaw = try {
+            NpyReader.readFloat32_2D(this, poolPath)
+        } catch (e: Exception) {
+            emptyArray()
+        }
+        val pos = anchors.toTypedArray()
+        val maxNeg = pos.size * NEG_POOL_RATIO
+        val neg: Array<FloatArray> = if (poolRaw.size > maxNeg) {
+            val rng = java.util.Random(42L)
+            val idx = poolRaw.indices.toMutableList().shuffled(rng).take(maxNeg)
+            Array(maxNeg) { poolRaw[idx[it]] }
+        } else poolRaw
+        val x = (pos + neg)
+        val y = IntArray(x.size) { if (it < pos.size) 1 else 0 }
+        val rf = RandomForestClassifier(nEstimators = 200, minSamplesLeaf = 2)
+        if (x.isNotEmpty() && x[0].isNotEmpty()) rf.fit(x, y)
+        return rf
     }
 
     private fun goToFallbackEnroll() {
@@ -200,5 +217,6 @@ class OwnerEnrollmentActivity : AppCompatActivity() {
 
     companion object {
         private const val ANCHOR_COUNT = 20
+        private const val NEG_POOL_RATIO = 4
     }
 }

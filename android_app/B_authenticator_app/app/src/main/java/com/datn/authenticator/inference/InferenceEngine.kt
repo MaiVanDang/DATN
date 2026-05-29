@@ -86,36 +86,14 @@ class InferenceEngine private constructor(
         )
     }
 
-    fun predictFused(
-        window: SensorWindow,
-        touchVec: FloatArray?,
-        touchScaler: Pair<FloatArray, FloatArray>?,
-    ): FusedResult {
+    fun predictFused(window: SensorWindow): FusedResult {
         val inertialResult = predict(window)
         val pInertial = inertialResult.probabilityLegitimate
-
-        var pTouch: Float? = null
-        val rfTouch = ownerProfile.getRfTouch()
-        if (rfTouch != null && rfTouch.isTrained && touchVec != null && touchScaler != null) {
-            val (mean, scale) = touchScaler
-            val scaled = FloatArray(touchVec.size) { i ->
-                val s = scale[i].takeIf { it > 0f } ?: 1f
-                (touchVec[i] - mean[i]) / s
-            }
-            pTouch = rfTouch.predictProba(scaled)
-            Log.d(TAG, "predictFused: p_touch=$pTouch")
-        }
-
-        val w = ownerProfile.getFusionW()
-        val fused = FusionEngine.fuse(floatArrayOf(pInertial), pTouch, w)
-
-        return FusedResult(inertialResult, pTouch, w, fused)
+        return FusedResult(inertialResult, pInertial)
     }
 
     data class FusedResult(
         val inertial: PredictionResult,
-        val pTouch: Float?,
-        val fusionW: Float,
         val fusedScore: Float,
     )
 
@@ -177,7 +155,7 @@ class InferenceEngine private constructor(
         private const val DEFAULT_MODEL_ASSET = "backbone.tflite"
 
         private const val SCORE_SCALE = 8f
-        private const val SCORE_BIAS  = 0.25f
+        private const val SCORE_BIAS  = 0.30f
 
         fun sigmoid(x: Float): Float = 1f / (1f + exp(-x))
 
@@ -190,9 +168,6 @@ class InferenceEngine private constructor(
             val ownerProfile = OwnerProfile(context)
             val adaptiveBuffer = AdaptiveAnchorBuffer(context)
 
-            // Adaptive pool is tied to a specific owner embedding. If the owner
-            // is unenrolled (or has been cleared), purge it so a new user does
-            // not inherit stale anchors.
             if (!ownerProfile.hasEnrollment() && adaptiveBuffer.size() > 0) {
                 Log.w(TAG, "Owner not enrolled — clearing stale adaptive pool (${adaptiveBuffer.size()} anchors)")
                 adaptiveBuffer.clear()
@@ -257,24 +232,6 @@ class InferenceEngine private constructor(
             }
         }
 
-        fun loadTouchScaler(
-            context: Context,
-            mode: ContextMode = ContextMode.loadOrDefault(context),
-        ): Pair<FloatArray, FloatArray>? {
-            val assetPath = ContextMode.assetPath(mode, "touch_scaler.json")
-            return try {
-                val json = context.assets.open(assetPath).bufferedReader().readText()
-                val obj = JSONObject(json)
-                val meanArr = obj.getJSONArray("mean")
-                val scaleArr = obj.getJSONArray("scale")
-                val mean  = FloatArray(meanArr.length())  { meanArr.getDouble(it).toFloat() }
-                val scale = FloatArray(scaleArr.length()) { scaleArr.getDouble(it).toFloat() }
-                mean to scale
-            } catch (e: Exception) {
-                Log.w(TAG, "$assetPath not found or invalid: ${e.message}")
-                null
-            }
-        }
 
         private fun tryLoadModel(context: Context, asset: String): MappedByteBuffer? {
             return try {

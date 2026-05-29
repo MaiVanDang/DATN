@@ -11,10 +11,24 @@ import android.os.SystemClock
 import android.util.Log
 import kotlin.math.abs
 
+/**
+ * Phát hiện cử chỉ lắc và TÁCH THÀNH DÃY CHỮ SỐ.
+ *
+ * Cơ chế: mỗi đỉnh gia tốc vượt ngưỡng = 1 lần lắc. Một "cụm" (burst) các lần
+ * lắc liên tiếp, khi người dùng DỪNG > [DIGIT_GAP_MS], được chốt thành một
+ * chữ số = số lần lắc trong cụm (kẹp về 1..9). Lắc tiếp → chữ số kế tiếp.
+ *
+ *   lắc lắc lắc | (dừng) | lắc | (dừng) | lắc lắc lắc lắc   →  [3, 1, 4]
+ *
+ * Callback [onDigitsUpdated] báo dãy hiện tại mỗi khi chốt 1 chữ số; [onShake]
+ * báo số lần lắc trong cụm đang gõ để UI hiển thị realtime.
+ */
 class ShakeDetector(
     private val context: Context,
-    private val onCountUpdated: (Int) -> Unit = {},
+    private val onDigitsUpdated: (List<Int>) -> Unit = {},
+    private val onShake: (currentBurst: Int) -> Unit = {},
 ) : SensorEventListener {
+
     private val sensorManager =
         context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val accelerometer: Sensor? =
@@ -24,62 +38,66 @@ class ShakeDetector(
     private val handler = Handler(handlerThread.looper)
 
     @Volatile private var counting = false
-    @Volatile private var count = 0
-    @Volatile private var lastPeakElapsedMs = 0L
+    @Volatile private var burstCount = 0
+    @Volatile private var lastPeakMs = 0L
+    private val sequence = mutableListOf<Int>()
 
-    fun start(maxDurationMs: Long = 30_000L) {
+    private val commitDigit = Runnable { commitCurrentBurst() }
+
+    fun start(maxDurationMs: Long = DEFAULT_TIMEOUT_MS) {
         if (counting) return
-        if (accelerometer == null) {
-            Log.w(TAG, "No accelerometer — shake detection disabled")
-            return
-        }
-        count = 0
-        lastPeakElapsedMs = 0L
-        counting = true
-        sensorManager.registerListener(
-            this, accelerometer, SensorManager.SENSOR_DELAY_GAME, handler
-        )
+        if (accelerometer == null) { Log.w(TAG, "No accelerometer"); return }
+        sequence.clear(); burstCount = 0; lastPeakMs = 0L; counting = true
+        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME, handler)
         handler.postDelayed({ stop() }, maxDurationMs)
     }
 
-    fun stop(): Int {
-        if (!counting) return count
+    /** Chốt cụm cuối (nếu có) và trả về dãy chữ số đã ghi. */
+    fun stop(): List<Int> {
+        if (!counting) return sequence.toList()
         counting = false
+        handler.removeCallbacks(commitDigit)
+        commitCurrentBurst()
         sensorManager.unregisterListener(this)
-        return count
+        return sequence.toList()
     }
 
-    fun shutdown() {
-        stop()
-        handlerThread.quitSafely()
-    }
+    fun shutdown() { stop(); handlerThread.quitSafely() }
 
-    fun currentCount(): Int = count
+    fun currentSequence(): List<Int> = sequence.toList()
+
+    private fun commitCurrentBurst() {
+        if (burstCount > 0) {
+            sequence.add(burstCount.coerceIn(1, 9))
+            burstCount = 0
+            onDigitsUpdated(sequence.toList())
+        }
+    }
 
     override fun onSensorChanged(event: SensorEvent) {
-        if (!counting) return
-        if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
-
-        val ax = event.values[0]
-        val mag = abs(ax)
+        if (!counting || event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
+        val mag = abs(
+            Math.sqrt((event.values[0] * event.values[0] +
+                    event.values[1] * event.values[1] +
+                    event.values[2] * event.values[2]).toDouble()).toFloat() - 9.81f
+        )
         if (mag < PEAK_THRESHOLD_MPS2) return
-
-        val nowMs = SystemClock.elapsedRealtime()
-        if (nowMs - lastPeakElapsedMs < DEBOUNCE_MS) return
-
-        lastPeakElapsedMs = nowMs
-        count += 1
-        onCountUpdated(count)
-        Log.d(TAG, "Peak detected — count=$count (|acc_x|=${"%.2f".format(mag)})")
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastPeakMs < DEBOUNCE_MS) return
+        lastPeakMs = now
+        burstCount += 1
+        onShake(burstCount)
+        handler.removeCallbacks(commitDigit)
+        handler.postDelayed(commitDigit, DIGIT_GAP_MS)
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
     companion object {
         private const val TAG = "ShakeDetector"
-        const val PEAK_THRESHOLD_MPS2 = 8.0f
+        const val PEAK_THRESHOLD_MPS2 = 6.0f
         const val DEBOUNCE_MS = 200L
-        const val DEFAULT_TIMEOUT_MS = 30_000L
-        const val SHAKE_TOLERANCE = 1
+        const val DIGIT_GAP_MS = 1200L
+        const val DEFAULT_TIMEOUT_MS = 60_000L
     }
 }
