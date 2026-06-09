@@ -3,7 +3,6 @@ import sys
 import numpy as np
 import pandas as pd
 
-# ── Cấu hình đường dẫn ───────────────────────────────────────────────────────
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 PROCESSED_DIR = os.path.join(SCRIPT_DIR, "processed")
 
@@ -11,7 +10,6 @@ if not os.path.isdir(PROCESSED_DIR):
     sys.exit(f"[ERROR] Không tìm thấy thư mục: {PROCESSED_DIR}\n"
              f"        Hãy chỉnh PROCESSED_DIR trong script.")
 
-# ── Hằng số tên file ─────────────────────────────────────────────────────────
 F_SESS   = "touch_session_features.csv"
 F_TAP    = "tap_gestures.csv"
 F_SCROLL = "scroll_gestures.csv"
@@ -20,7 +18,6 @@ F_XW     = "X_walking.npy"
 F_YI     = "y_inertial.npy"
 F_YW     = "y_walking.npy"
 
-# ── Duyệt qua tất cả user folder ─────────────────────────────────────────────
 user_dirs = sorted([
     d for d in os.listdir(PROCESSED_DIR)
     if os.path.isdir(os.path.join(PROCESSED_DIR, d))
@@ -29,7 +26,6 @@ user_dirs = sorted([
 if not user_dirs:
     sys.exit(f"[ERROR] Không có thư mục user nào trong: {PROCESSED_DIR}")
 
-# ── Collect dữ liệu ──────────────────────────────────────────────────────────
 all_sess_rows  = []
 imu_summary    = []
 imu_window_shape = None
@@ -40,7 +36,6 @@ total_walking  = 0
 for user_id in user_dirs:
     user_path = os.path.join(PROCESSED_DIR, user_id)
 
-    # ── IMU ──────────────────────────────────────────────────────────────────
     n_iner = n_walk = 0
 
     path_xi = os.path.join(user_path, F_XI)
@@ -69,7 +64,6 @@ for user_id in user_dirs:
         "total_imu":        n_iner + n_walk,
     })
 
-    # ── Touch / Keystroke ────────────────────────────────────────────────────
     path_sess = os.path.join(user_path, F_SESS)
     if os.path.exists(path_sess):
         df = pd.read_csv(path_sess)
@@ -78,21 +72,18 @@ for user_id in user_dirs:
     else:
         print(f"  [WARN] Không tìm thấy {F_SESS} cho {user_id}")
 
-# ── Ghép toàn bộ session ─────────────────────────────────────────────────────
 if not all_sess_rows:
     sys.exit("[ERROR] Không đọc được bất kỳ touch_session_features.csv nào.")
 
 sess_df  = pd.concat(all_sess_rows, ignore_index=True)
 imu_df   = pd.DataFrame(imu_summary)
 
-# ── In kết quả ───────────────────────────────────────────────────────────────
 W = 62
 
 print("=" * W)
 print("  DATASET STATISTICS")
 print("=" * W)
 
-# ── [1] IMU ───────────────────────────────────────────────────────────────────
 print("\n[1] CẢM BIẾN IMU — theo User")
 print("-" * W)
 print(f"  {'User':<12} {'Inertial':>10} {'Walking':>10} {'Total IMU':>10}")
@@ -107,7 +98,6 @@ if imu_window_shape:
     print(f"\n  ► Shape mỗi mẫu: {imu_window_shape[0]} timesteps × "
           f"{imu_window_shape[1]} sensor axes")
 
-# ── [2] Touch & Keystroke theo User ──────────────────────────────────────────
 print("\n[2] TOUCH & KEYSTROKE — theo User")
 print("-" * W)
 
@@ -132,7 +122,6 @@ gt = touch_by_user.sum()
 print(f"  {'TOTAL':<12} {gt['taps']:>8,} {gt['scrolls']:>9,} "
       f"{gt['keystrokes']:>12,} {gt['touch(tap+scroll)']:>8,} {gt['total']:>8,}")
 
-# ── [3] Chi tiết theo Session ─────────────────────────────────────────────────
 print("\n[3] CHI TIẾT THEO SESSION")
 print("-" * W)
 
@@ -147,7 +136,6 @@ for _, r in det.iterrows():
     print(f"  {r['user_id']:<12} {r['session_id']:<14} {r['tap_n']:>6} "
           f"{r['scroll_n']:>8} {r['key_n']:>6} {r['total']:>7}")
 
-# ── [4] Tóm tắt ──────────────────────────────────────────────────────────────
 print("\n" + "=" * W)
 print("  TÓM TẮT TỔNG QUAN")
 print("=" * W)

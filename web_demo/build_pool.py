@@ -11,7 +11,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).parent))
-from touch_features import FEATURE_COLS, FEAT_DIM
+from web_demo.touch_features import FEATURE_COLS, FEAT_DIM
 
 DATA_DIR   = Path(__file__).parent / "processed_data"
 EXPORT_DIR = Path(__file__).parent / "export"

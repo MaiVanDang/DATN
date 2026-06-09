@@ -12,7 +12,6 @@ Output : web_demo/artifacts/cnn_v2/export_walking/backbone.tflite
 import os, sys
 import numpy as np
 
-# ── Check TensorFlow ──────────────────────────────────────────────────────
 try:
     import tensorflow as tf
     print(f"TensorFlow {tf.__version__}")
@@ -22,7 +21,6 @@ except ImportError:
 import torch
 import torch.nn as nn
 
-# ── Paths ─────────────────────────────────────────────────────────────────
 REPO_ROOT  = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 V2_DIR     = os.path.join(REPO_ROOT, "web_demo", "artifacts", "cnn_v2")
 PT_PATH    = os.path.join(V2_DIR, "models_walking", "backbone.pt")
@@ -30,29 +28,28 @@ EXPORT_DIR = os.path.join(V2_DIR, "export_walking")
 OUT_TFLITE = os.path.join(EXPORT_DIR, "backbone.tflite")
 ASSETS_DIR = os.path.join(REPO_ROOT, "android_app", "B_authenticator_app", "app", "src", "main", "assets")
 
-# ── 1. BackboneCNN (PyTorch, NCW format) ──────────────────────────────────
 class BackboneCNN(nn.Module):
     def __init__(self, in_ch=9, embed_dim=128):
         super().__init__()
         self.encoder = nn.Sequential(
-            nn.Conv1d(in_ch,     64,        kernel_size=5, padding=2),  # 0
-            nn.BatchNorm1d(64),                                          # 1
-            nn.ReLU(),                                                    # 2
-            nn.MaxPool1d(2),                                             # 3
-            nn.Conv1d(64,       128,       kernel_size=3, padding=1),   # 4
-            nn.BatchNorm1d(128),                                         # 5
-            nn.ReLU(),                                                    # 6
-            nn.MaxPool1d(2),                                             # 7
-            nn.Conv1d(128,      embed_dim, kernel_size=3, padding=1),   # 8
-            nn.BatchNorm1d(embed_dim),                                   # 9
-            nn.ReLU(),                                                    # 10
+            nn.Conv1d(in_ch,     64,        kernel_size=5, padding=2),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+            nn.Conv1d(64,       128,       kernel_size=3, padding=1),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+            nn.Conv1d(128,      embed_dim, kernel_size=3, padding=1),
+            nn.BatchNorm1d(embed_dim),
+            nn.ReLU(),
         )
         self.pool       = nn.AdaptiveAvgPool1d(1)
         self.classifier = nn.Linear(embed_dim, 23)
 
-    def forward(self, x):   # x: [N, 9, 200]
+    def forward(self, x):
         x = self.encoder(x)
-        return self.pool(x).squeeze(-1)   # [N, 128]
+        return self.pool(x).squeeze(-1)
 
 print(f"Loading: {PT_PATH}")
 sd = torch.load(PT_PATH, map_location="cpu")
@@ -61,11 +58,9 @@ pt_model.load_state_dict(sd)
 pt_model.eval()
 print("PyTorch model OK")
 
-# helper: tensor -> numpy (compatible with NumPy 2.x / torch built against NumPy 1.x)
 def to_np(tensor):
     return np.array(tensor.detach().float().cpu().tolist(), dtype=np.float32)
 
-# ── 2. Build Keras model (NWC: [N, 200, 9]) ────────────────────────────────
 def build_keras_backbone():
     inp = tf.keras.Input(shape=(200, 9), name="input")
 
@@ -88,9 +83,7 @@ def build_keras_backbone():
 
 keras_model = build_keras_backbone()
 
-# ── 3. Transfer weights PyTorch -> Keras ───────────────────────────────────
 def set_conv(layer, w_key, b_key):
-    # PyTorch: [out, in, k]  ->  Keras: [k, in, out]
     w = to_np(sd[w_key]).transpose(2, 1, 0)
     b = to_np(sd[b_key])
     layer.set_weights([w, b])
@@ -111,23 +104,20 @@ set_conv(keras_model.get_layer("conv3"), "encoder.8.weight", "encoder.8.bias")
 set_bn  (keras_model.get_layer("bn3"),  "encoder.9")
 print("Weights transferred to Keras")
 
-# ── 4. Smoke-test Keras output shape ──────────────────────────────────────
 np.random.seed(42)
 x_nwc = np.random.randn(1, 200, 9).astype(np.float32)
 keras_out = keras_model.predict(x_nwc, verbose=0)
 assert keras_out.shape == (1, 128), f"Unexpected Keras output shape: {keras_out.shape}"
 print(f"Keras output shape OK: {keras_out.shape}  norm={np.linalg.norm(keras_out):.3f}")
 
-# ── 5. Convert to TFLite (float32) ────────────────────────────────────────
 converter = tf.lite.TFLiteConverter.from_keras_model(keras_model)
-converter.optimizations = []   # keep float32
+converter.optimizations = []
 tflite_bytes = converter.convert()
 
 with open(OUT_TFLITE, "wb") as f:
     f.write(tflite_bytes)
 print(f"Saved TFLite -> {OUT_TFLITE}  ({len(tflite_bytes)//1024} KB)")
 
-# ── 6. Verify TFLite ───────────────────────────────────────────────────────
 interp = tf.lite.Interpreter(model_content=tflite_bytes)
 interp.allocate_tensors()
 inp_d = interp.get_input_details()[0]
@@ -143,7 +133,6 @@ print(f"Max diff Keras vs TFLite: {diff_kt:.2e}  (must be < 1e-5)")
 if diff_kt > 1e-4:
     sys.exit(f"ERROR: Keras vs TFLite diff too large ({diff_kt:.6f})")
 
-# ── 7. Copy assets to Android app ─────────────────────────────────────────
 import shutil
 
 COPY_LIST  = [
@@ -153,7 +142,6 @@ COPY_LIST  = [
     ("touch_scaler.json",          os.path.join(EXPORT_DIR, "touch_scaler.json")),
 ]
 
-# ── 8. Update export_manifest.json ────────────────────────────────────────
 import json, datetime
 manifest_path = os.path.join(ASSETS_DIR, "export_manifest.json")
 manifest = json.load(open(manifest_path)) if os.path.exists(manifest_path) else {}

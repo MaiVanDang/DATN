@@ -1,0 +1,235 @@
+\documentclass[../DoAn.tex]{subfiles}
+\begin{document}
+
+Chương 4 đã trình bày quá trình xây dựng ba kiến trúc backbone cùng hàm quyết định nhận dạng tập mở và cơ chế dung hợp. Chương 5 đánh giá có hệ thống các thành phần đó nhằm trả lời ba câu hỏi: kiến trúc backbone nào cho hiệu năng tốt nhất, việc bổ sung nhánh tương tác qua dung hợp có cải thiện hiệu năng hay không, và ngữ cảnh hoạt động ảnh hưởng thế nào tới kết quả. Trên cơ sở các kết quả này, chương rút ra cấu hình phù hợp nhất để hiện thực hóa trên thiết bị ở Chương 6. Phần \ref{sec:thamso} trình bày các chỉ số đánh giá. Phần \ref{sec:thinghiem} mô tả giao thức thí nghiệm. Phần \ref{sec:ketqua} trình bày và phân tích kết quả. Phần \ref{sec:scorer} so sánh các hàm quyết định trên cùng bộ mã hóa. Phần \ref{sec:luachon} đúc kết lựa chọn cấu hình triển khai. Phần \ref{sec:sosanh} đối chiếu kết quả của đề tài với các công trình liên quan.
+
+\section{Các chỉ số đánh giá}
+\label{sec:thamso}
+
+Hệ thống được đánh giá bằng các chỉ số tiêu chuẩn của bài toán xác thực. Tỉ lệ chấp nhận sai (\textit{False Acceptance Rate} - FAR) là tỉ lệ các trường hợp người lạ bị nhận nhầm thành chủ sở hữu, phản ánh rủi ro bảo mật. Tỉ lệ từ chối sai (\textit{False Rejection Rate} - FRR) là tỉ lệ các trường hợp chủ sở hữu bị từ chối, phản ánh mức độ phiền toái cho người dùng hợp lệ. Hai chỉ số này được tính theo
+
+\begin{equation}
+    \text{FAR} = \frac{\text{số lần người lạ được chấp nhận}}{\text{tổng số lần thử của người lạ}},
+    \qquad
+    \text{FRR} = \frac{\text{số lần chủ sở hữu bị từ chối}}{\text{tổng số lần thử của chủ sở hữu}}.
+    \label{eq:far_frr}
+\end{equation}
+
+Hai tỉ lệ này phụ thuộc vào ngưỡng quyết định và đánh đổi lẫn nhau khi thay đổi ngưỡng: nâng ngưỡng làm giảm FAR nhưng tăng FRR, và ngược lại.
+
+Để có một chỉ số tổng hợp không phụ thuộc ngưỡng, đề tài sử dụng tỉ lệ lỗi cân bằng (\textit{Equal Error Rate} - EER), là giá trị lỗi tại ngưỡng mà ở đó FAR bằng FRR,
+
+\begin{equation}
+    \text{EER} = \text{FAR}(\tau^*) = \text{FRR}(\tau^*),
+    \qquad \tau^* : \text{FAR}(\tau^*) = \text{FRR}(\tau^*),
+    \label{eq:eer}
+\end{equation}
+
+với $\tau^*$ là ngưỡng cân bằng; EER càng thấp thì hệ thống càng tốt. Ngoài ra, diện tích dưới đường cong ROC (\textit{Area Under the Curve} - AUC) được dùng để đo khả năng phân biệt tổng thể của mô hình một cách độc lập với ngưỡng, với giá trị càng gần 1 càng tốt. Trong các bảng kết quả, FAR và FRR được báo cáo tại điểm cân bằng sai số tương ứng với EER.
+
+\section{Phương pháp thí nghiệm}
+\label{sec:thinghiem}
+
+Hệ thống được đánh giá trên bộ dữ liệu gồm 26 người tham gia đã mô tả ở Chương 3, với dữ liệu của mỗi người được chia theo phiên thành các tập huấn luyện, kiểm định và kiểm thử tách biệt nhằm tránh rò rỉ thông tin giữa các tập. Việc tách theo phiên bảo đảm rằng mô hình được kiểm thử trên những phiên hành vi chưa từng nhìn thấy trong huấn luyện, phản ánh sát điều kiện sử dụng thực tế.
+
+Để đánh giá toàn diện, đề tài thực hiện thí nghiệm trên hai kịch bản. Trong kịch bản nhận dạng tập đóng, các danh tính dùng làm người lạ khi kiểm thử là những người đã xuất hiện trong quá trình huấn luyện backbone. Trong kịch bản nhận dạng tập mở, người lạ là những danh tính được giữ riêng, hoàn toàn không tham gia huấn luyện backbone, qua đó mô phỏng đúng tình huống hệ thống gặp một người chưa từng biết. Kịch bản tập mở phản ánh sát mục tiêu phát hiện người lạ của đề tài, trong khi kịch bản tập đóng cho thấy giới hạn trên về khả năng phân biệt khi danh tính đã được quan sát.
+
+Mỗi kịch bản lại được thực hiện theo hai cấu hình ngữ cảnh hoạt động đã chuẩn bị ở Chương 3, gồm cấu hình chỉ đi bộ và cấu hình toàn bộ ba hoạt động. Với mỗi tổ hợp kịch bản và ngữ cảnh, ba kiến trúc backbone được đánh giá trên ba cấu hình dữ liệu là chỉ dùng nhánh quán tính, chỉ dùng nhánh tương tác và dung hợp hai nhánh.
+
+Một điểm cần làm rõ trước khi đọc kết quả là đồ án sử dụng \emph{hai giao thức đánh giá khác nhau} cho hai mục tiêu khác nhau, và việc phân biệt chúng là cần thiết để diễn giải đúng các con số. Phần so sánh kiến trúc và cấu hình ở Mục~\ref{sec:ketqua} được đo trên một cụm người lạ \emph{cố định} gồm năm người được giữ riêng (user22--user26), với mỗi cấu hình được chạy năm lần (đổi cách chia phiên ngẫu nhiên) rồi lấy trung bình; giao thức này đủ để xếp hạng tương đối giữa nhiều cấu hình với chi phí tính toán thấp, nhưng vì chỉ dựa trên một cụm người lạ duy nhất nên giá trị EER tuyệt đối phụ thuộc mạnh vào cụm cụ thể đó và chưa phản ánh mức lỗi trung bình trên toàn bộ tập người dùng. Để bảng gọn, độ lệch chuẩn giữa năm lần chạy được lược bỏ trong các bảng ở Mục~\ref{sec:ketqua}. Phần khảo sát hàm quyết định ở Mục~\ref{sec:scorer} dùng kiểm thử chéo \textit{leave-users-out} sáu vòng, mỗi vòng giữ một cụm năm người lạ \emph{khác nhau}, và báo cáo kết quả dưới dạng trung bình kèm độ lệch chuẩn --- ước lượng đáng tin hơn về mức lỗi thực sự vì không phụ thuộc vào một cụm cố định. Vì khác giao thức, các con số EER tuyệt đối giữa hai mục \emph{không so sánh trực tiếp với nhau}; Mục~\ref{sec:scorer} sẽ phân tích tường minh phần chênh lệch nào đến từ giao thức đánh giá và phần nào đến từ hàm chấm điểm.
+
+\section{Kết quả và phân tích}
+\label{sec:ketqua}
+
+\subsection{Kết quả ở kịch bản tập đóng}
+
+Bảng~\ref{tab:closed_all} và Bảng~\ref{tab:closed_walk} trình bày kết quả ở kịch bản tập đóng lần lượt cho cấu hình toàn bộ ba hoạt động và cấu hình chỉ đi bộ. Các kết quả trong mục này được đo trên một cụm người lạ cố định (user22--user26), lấy trung bình năm lần chạy, và dùng để xếp hạng tương đối giữa các cấu hình.
+
+\begin{table}[H]
+    \centering
+    \caption{Kết quả tập đóng, cấu hình toàn bộ ba hoạt động}
+    \label{tab:closed_all}
+    \begin{tabular}{|l|l|c|c|c|c|}
+    \hline
+    \textbf{Kiến trúc} & \textbf{Cấu hình} & \textbf{AUC} & \textbf{EER (\%)} & \textbf{FAR (\%)} & \textbf{FRR (\%)} \\
+    \hline
+    \multirow{3}{*}{CNN 1D}     & Quán tính & 0,994 & 3,35  & 3,26  & 3,51 \\
+                                & Tương tác & 0,952 & 10,33 & 10,37 & 10,53 \\
+                                & Dung hợp  & 0,782 & 22,36 & 22,36 & 23,51 \\
+    \hline
+    \multirow{3}{*}{CNN-LSTM}   & Quán tính & 0,997 & 2,88  & 2,88  & 3,16 \\
+                                & Tương tác & 0,952 & 10,57 & 10,47 & 11,23 \\
+                                & Dung hợp  & 0,948 & 10,31 & 10,31 & 10,53 \\
+    \hline
+    \multirow{3}{*}{CNN-BiLSTM} & Quán tính & 0,993 & 4,81  & 4,64  & 4,91 \\
+                                & Tương tác & 0,949 & 10,55 & 10,41 & 10,88 \\
+                                & Dung hợp  & 0,937 & 11,50 & 11,44 & 11,93 \\
+    \hline
+    \end{tabular}
+\end{table}
+
+\begin{table}[H]
+    \centering
+    \caption{Kết quả tập đóng, cấu hình chỉ đi bộ}
+    \label{tab:closed_walk}
+    \begin{tabular}{|l|l|c|c|c|c|}
+    \hline
+    \textbf{Kiến trúc} & \textbf{Cấu hình} & \textbf{AUC} & \textbf{EER (\%)} & \textbf{FAR (\%)} & \textbf{FRR (\%)} \\
+    \hline
+    \multirow{3}{*}{CNN 1D}     & Quán tính & 0,996 & 3,82  & 3,76  & 3,86 \\
+                                & Tương tác & 0,947 & 10,82 & 10,74 & 10,88 \\
+                                & Dung hợp  & 0,805 & 21,07 & 21,07 & 22,11 \\
+    \hline
+    \multirow{3}{*}{CNN-LSTM}   & Quán tính & 0,996 & 2,73  & 2,73  & 3,51 \\
+                                & Tương tác & 0,952 & 10,37 & 10,35 & 10,53 \\
+                                & Dung hợp  & 0,934 & 14,17 & 14,13 & 14,74 \\
+    \hline
+    \multirow{3}{*}{CNN-BiLSTM} & Quán tính & 0,997 & 3,12  & 3,12  & 3,86 \\
+                                & Tương tác & 0,950 & 11,11 & 11,07 & 11,58 \\
+                                & Dung hợp  & 0,930 & 15,17 & 14,97 & 15,79 \\
+    \hline
+    \end{tabular}
+\end{table}
+
+Ở kịch bản tập đóng, cả ba kiến trúc đều đạt hiệu năng cao trên nhánh quán tính, với EER trong khoảng từ 2,7\% đến 4,8\% và đều thỏa mục tiêu dưới 5\% đặt ra ban đầu. Nhánh tương tác đạt EER quanh mức 10\%, kém hơn rõ rệt so với nhánh quán tính. Một quan sát quan trọng là cấu hình dung hợp không vượt trội mà thậm chí thấp hơn nhánh quán tính đơn lẻ; với CNN 1D, dung hợp kéo EER từ 3,35\% lên 22,36\%. Nguyên nhân trực tiếp là nhánh tương tác yếu hơn hẳn kéo điểm tổng hợp đi xuống khi dung hợp tuyến tính theo điểm số. Tuy nhiên, cần thận trọng khi diễn giải hiện tượng này: hiệu năng thấp của nhánh tương tác nhiều khả năng phản ánh giới hạn về dữ liệu và tiền xử lý của riêng nhánh này, hơn là một kết luận rằng hành vi tương tác không mang thông tin phân biệt. So với dữ liệu quán tính, lượng dữ liệu tương tác thu được nhỏ hơn nhiều và đặc trưng động học được trích xuất thủ công, nên bộ phân loại touch chưa được huấn luyện trên đủ dữ liệu và đặc trưng để đạt chất lượng tương xứng với nhánh quán tính. Chính chênh lệch lớn về chất lượng giữa hai nhánh, chứ không phải bản chất của tín hiệu touch, là lý do dung hợp tuyến tính theo điểm số chưa phát huy được tính bổ sung kỳ vọng trong điều kiện dữ liệu hiện có.
+
+\subsection{Kết quả ở kịch bản tập mở}
+
+Bảng~\ref{tab:open_all} và Bảng~\ref{tab:open_walk} trình bày kết quả ở kịch bản tập mở, là kịch bản phản ánh sát mục tiêu phát hiện người lạ. Như đã nêu ở Mục~\ref{sec:thinghiem}, các con số trong mục này cũng được đo trên cụm người lạ cố định (user22--user26), lấy trung bình năm lần chạy.
+
+\begin{table}[H]
+    \centering
+    \caption{Kết quả tập mở, cấu hình toàn bộ ba hoạt động}
+    \label{tab:open_all}
+    \begin{tabular}{|l|l|c|c|c|c|}
+    \hline
+    \textbf{Kiến trúc} & \textbf{Cấu hình} & \textbf{AUC} & \textbf{EER (\%)} & \textbf{FAR (\%)} & \textbf{FRR (\%)} \\
+    \hline
+    \multirow{3}{*}{CNN 1D}     & Quán tính & 0,850 & 21,00 & 21,33 & 22,67 \\
+                                & Tương tác & 0,614 & 41,11 & 30,00 & 46,67 \\
+                                & Dung hợp  & 0,633 & 39,67 & 39,33 & 41,33 \\
+    \hline
+    \multirow{3}{*}{CNN-LSTM}   & Quán tính & 0,832 & 30,33 & 29,33 & 30,67 \\
+                                & Tương tác & 0,604 & 42,89 & 30,00 & 49,33 \\
+                                & Dung hợp  & 0,795 & 29,33 & 29,00 & 32,00 \\
+    \hline
+    \multirow{3}{*}{CNN-BiLSTM} & Quán tính & 0,824 & 29,00 & 29,00 & 30,67 \\
+                                & Tương tác & 0,613 & 41,22 & 30,33 & 46,67 \\
+                                & Dung hợp  & 0,789 & 29,33 & 28,00 & 29,33 \\
+    \hline
+    \end{tabular}
+\end{table}
+
+\begin{table}[H]
+    \centering
+    \caption{Kết quả tập mở, cấu hình chỉ đi bộ}
+    \label{tab:open_walk}
+    \begin{tabular}{|l|l|c|c|c|c|}
+    \hline
+    \textbf{Kiến trúc} & \textbf{Cấu hình} & \textbf{AUC} & \textbf{EER (\%)} & \textbf{FAR (\%)} & \textbf{FRR (\%)} \\
+    \hline
+    \multirow{3}{*}{CNN 1D}     & Quán tính & 0,803 & 26,67 & 25,67 & 26,67 \\
+                                & Tương tác & 0,616 & 41,22 & 30,33 & 46,67 \\
+                                & Dung hợp  & 0,624 & 41,33 & 49,33 & 41,33 \\
+    \hline
+    \multirow{3}{*}{CNN-LSTM}   & Quán tính & 0,741 & 30,33 & 29,00 & 30,67 \\
+                                & Tương tác & 0,610 & 41,33 & 30,67 & 46,67 \\
+                                & Dung hợp  & 0,743 & 32,67 & 27,67 & 37,33 \\
+    \hline
+    \multirow{3}{*}{CNN-BiLSTM} & Quán tính & 0,713 & 33,33 & 33,00 & 34,67 \\
+                                & Tương tác & 0,610 & 41,33 & 30,67 & 46,67 \\
+                                & Dung hợp  & 0,736 & 31,50 & 29,00 & 34,67 \\
+    \hline
+    \end{tabular}
+\end{table}
+
+Ở kịch bản tập mở, hiệu năng của mọi cấu hình đều giảm đáng kể so với tập đóng, cho thấy việc phân biệt một người hoàn toàn chưa từng xuất hiện trong huấn luyện là bài toán khó hơn nhiều. Trong số ba kiến trúc, CNN 1D với nhánh quán tính cho kết quả tốt nhất ở cấu hình toàn bộ ba hoạt động, đạt AUC 0,850 và EER 21,0\%, vượt trội so với CNN-LSTM và CNN-BiLSTM vốn có EER trên dưới 30\%. Điều này cho thấy kiến trúc tích chập thuần học được biểu diễn tổng quát hơn cho danh tính chưa biết, trong khi các biến thể hồi tiếp có xu hướng khớp với tập danh tính đã quan sát và do đó kém tổng quát hóa hơn.
+
+Cần lưu ý rằng con số EER 21,0\% nói trên được đo trên một cụm người lạ cố định (user22--user26) với hàm chấm điểm cơ sở \textit{cos\_mean}. Như sẽ phân tích ở Mục~\ref{sec:scorer}, phần lớn mức lỗi này bắt nguồn từ việc chỉ xét một cụm người lạ cố định và từ hàm chấm điểm chưa tối ưu, chứ không phản ánh giới hạn của bản thân bộ mã hóa; ở đây con số chỉ được dùng để xếp hạng tương đối giữa ba kiến trúc dưới cùng một điều kiện đánh giá.
+
+Nhánh tương tác cho hiệu năng yếu trong cả hai kịch bản, với EER quanh 41\% ở tập mở, gần với mức đoán ngẫu nhiên. Mức gần ngẫu nhiên này cho thấy bộ phân loại touch gần như chưa học được biểu diễn phân biệt cho người lạ; tuy nhiên, nhiều khả năng nguyên nhân nằm ở dữ liệu và tiền xử lý chứ không phải ở bản chất của tín hiệu tương tác. Lượng dữ liệu touch thu được còn hạn chế so với dữ liệu quán tính, đặc trưng động học được trích xuất thủ công nên có thể chưa nắm bắt đủ thông tin phân biệt, và quy trình tiền xử lý cho nhánh này chưa được tinh chỉnh ngang với nhánh quán tính. Hệ quả trực tiếp là cấu hình dung hợp tuyến tính bị nhánh touch yếu kéo xuống, không cải thiện được nhánh quán tính và thậm chí làm xấu đi rõ rệt ở trường hợp CNN 1D. Do đó, kết quả này không nên hiểu là bằng chứng rằng hành vi tương tác vô ích cho xác thực, mà là dấu hiệu cho thấy nhánh touch và cơ chế dung hợp cần thêm dữ liệu cùng một quy trình trích xuất đặc trưng và tiền xử lý tốt hơn trước khi có thể đóng góp vào hệ thống. Quan sát này còn được minh họa trực quan trong công cụ demo trên nền web trình bày ở Phần~\ref{sec:webdemo}, nơi điểm dung hợp và điểm quán tính được hiển thị song song trên từng phiên, cho thấy trong điều kiện dữ liệu hiện tại dung hợp chưa vượt nhánh quán tính.
+
+\subsection{Ảnh hưởng của ngữ cảnh hoạt động}
+
+So sánh hai cấu hình ngữ cảnh cho thấy việc sử dụng toàn bộ ba hoạt động cho kết quả tốt hơn so với chỉ dùng dữ liệu đi bộ ở kịch bản tập mở. Với CNN 1D trên nhánh quán tính, EER tập mở giảm từ 26,67\% ở cấu hình chỉ đi bộ xuống 21,0\% ở cấu hình toàn bộ ba hoạt động. Mặc dù tín hiệu khi đứng và ngồi ít biến thiên hơn khi đi bộ, việc đưa thêm dữ liệu của các hoạt động này giúp tăng lượng và độ đa dạng của mẫu huấn luyện, qua đó giúp bộ mã hóa học được không gian embedding tổng quát hơn và cải thiện khả năng phân biệt người lạ.
+
+\section{So sánh các hàm quyết định trên cùng bộ mã hóa}
+\label{sec:scorer}
+
+Các kết quả ở Phần~\ref{sec:ketqua} được tính với một hàm quyết định duy nhất là trung bình độ tương đồng cosine giữa embedding đầu vào và tập anchor, ký hiệu \textit{cos\_mean}, và trên một cụm người lạ cố định (user22--user26). Tuy nhiên, hàm chuyển từ embedding sang điểm tin cậy là một bậc tự do độc lập với kiến trúc backbone: cùng một bộ mã hóa có thể kết hợp với nhiều cách chấm điểm khác nhau mà không cần huấn luyện lại mạng. Phần này khảo sát một cách có hệ thống ảnh hưởng của hàm quyết định, nhằm xác định liệu \textit{cos\_mean} có thực sự là lựa chọn tối ưu hay không, đồng thời tách bạch phần cải thiện đến từ hàm chấm điểm với phần đến từ giao thức đánh giá.
+
+Bốn hàm quyết định được so sánh trên cùng embedding của bộ mã hóa CNN 1D. Hàm \textit{cos\_mean} lấy trung bình cosine tới toàn bộ anchor. Hàm \textit{cos\_knn} chỉ lấy trung bình của $k$ giá trị cosine lớn nhất, nhằm giảm ảnh hưởng của các anchor kém đại diện. Hàm \textit{cos\_znorm} chuẩn hóa điểm \textit{cos\_mean} theo phân bố điểm của một nhóm người dùng nền (cohort), kế thừa kỹ thuật chuẩn hóa điểm trong xác thực người nói~\cite{auckenthaler2000score}: với mỗi mẫu, điểm thô được trừ đi trung bình và chia cho độ lệch chuẩn của điểm mà cohort tạo ra đối với cùng tập anchor, qua đó hiệu chỉnh độ lệch riêng của từng hồ sơ chủ sở hữu. Hàm \textit{maha} thay độ tương đồng cosine bằng khoảng cách Mahalanobis tới phân bố embedding của chủ sở hữu, một tiêu chí phát hiện điểm ngoài phân phối khai thác cấu trúc hiệp phương sai của không gian đặc trưng.
+
+Do chỉ xét một cụm người lạ cố định, ước lượng tập mở ở Mục~\ref{sec:ketqua} phụ thuộc mạnh vào cụm được chọn và có thể không đại diện. Để có ước lượng đáng tin và không phụ thuộc một cụm cụ thể, phần này áp dụng giao thức kiểm thử chéo \textit{leave-users-out}: ở mỗi vòng, một nhóm năm người dùng được giữ làm người lạ, các người dùng còn lại đóng vai trò cohort tham chiếu; quá trình lặp qua sáu vòng với các nhóm khác nhau và kết quả báo cáo dưới dạng trung bình kèm độ lệch chuẩn. Bảng~\ref{tab:scorer_open} trình bày kết quả tập mở ở cấu hình toàn bộ ba hoạt động.
+
+\begin{table}[H]
+    \centering
+    \caption{So sánh các hàm quyết định trên bộ mã hóa CNN 1D}
+    \label{tab:scorer_open}
+    \begin{tabular}{|l|c|c|c|}
+    \hline
+    \textbf{Hàm quyết định} & \textbf{AUC} & \textbf{EER tập mở (\%)} & \textbf{EER tập đóng (\%)} \\
+    \hline
+    cos\_znorm & 0,995 & 1,39 $\pm$ 2,40 & 0,34 \\
+    cos\_knn   & 0,994 & 2,50 $\pm$ 3,26 & 0,12 \\
+    cos\_mean (cơ sở) & 0,991 & 3,40 $\pm$ 4,90 & 0,34 \\
+    maha       & 0,900 & 21,11 $\pm$ 5,61 & 15,86 \\
+    \hline
+    \end{tabular}
+\end{table}
+
+Kết quả cho thấy hai quan sát quan trọng.
+
+Thứ nhất, hàm \textit{cos\_mean} dùng trong đánh giá ban đầu không phải là lựa chọn tốt nhất: cả \textit{cos\_znorm} và \textit{cos\_knn} đều cho tỉ lệ lỗi cân bằng tập mở thấp hơn một cách nhất quán, trong đó \textit{cos\_znorm} đạt EER trung bình $1,39\% \pm 2,40\%$. Việc chuẩn hóa điểm theo cohort giúp hiệu chỉnh độ lệch riêng của từng hồ sơ, qua đó tách bạch tốt hơn giữa chủ sở hữu và người lạ.
+
+Thứ hai, có thể tách bạch tường minh hai nguồn tạo nên khoảng cách giữa con số 21,0\% ở Bảng~\ref{tab:open_all} và mức EER trong phần này, nhờ Bảng~\ref{tab:scorer_open} giữ cố định giao thức leave-users-out và chỉ thay đổi hàm chấm điểm. Một mặt, chính hàm \textit{cos\_mean} khi chuyển từ một cụm người lạ cố định (Bảng~\ref{tab:open_all}) sang trung bình qua sáu cụm người lạ khác nhau của kiểm thử chéo đã giảm từ 21,0\% xuống còn 3,40\%; phần giảm này đến từ việc không còn phụ thuộc vào một cụm người lạ duy nhất (vốn tình cờ khó) mà lấy trung bình trên nhiều cụm, tức từ giao thức đánh giá, không liên quan đến hàm chấm điểm. Mặt khác, dưới cùng giao thức đó, việc thay \textit{cos\_mean} bằng \textit{cos\_znorm} tiếp tục kéo EER từ 3,40\% xuống 1,39\%; đây mới là phần cải thiện do hàm chấm điểm mang lại. Như vậy cú giảm lớn từ 21,0\% xuống 1,39\% chủ yếu phản ánh độ tin cậy của phương pháp đo, còn đóng góp riêng của việc chuẩn hóa điểm theo cohort là mức cải thiện vừa phải từ 3,40\% xuống 1,39\%; trong cả hai trường hợp, mức lỗi thấp cho thấy giới hạn thực sự không nằm ở bản thân bộ mã hóa mà ở cách chấm điểm và cách đánh giá ở bước đầu.
+
+Hàm \textit{maha} là một ví dụ minh họa cho tầm quan trọng của kiểm thử chéo. Trong đánh giá ban đầu với cụm người lạ cố định, hàm này từng cho kết quả tốt nhất ở cấu hình chỉ đi bộ; tuy nhiên khi đánh giá qua sáu cụm khác nhau, hiệu năng của nó sụt giảm rõ rệt và kém ổn định (EER $21,11\% \pm 5,61\%$), cho thấy kết quả tốt ban đầu chỉ là ngẫu nhiên của một cụm thuận lợi. Quan sát này khẳng định rằng việc kết luận chỉ dựa trên một cụm người lạ cố định là không đáng tin đối với kịch bản tập mở có ít danh tính, và củng cố cho việc lựa chọn giao thức leave-users-out.
+
+Một ưu điểm thực tiễn quan trọng là việc thay hàm quyết định không làm thay đổi đường triển khai trên thiết bị. Bộ mã hóa, định dạng TensorFlow Lite, luồng đăng ký và toàn bộ kiến trúc ứng dụng được giữ nguyên; riêng \textit{cos\_znorm} sử dụng tập người dùng nền vốn đã được đóng gói sẵn trong ứng dụng để chuẩn hóa điểm. Do đó cải thiện này đạt được mà không cần huấn luyện lại mô hình và không phát sinh chi phí triển khai đáng kể.
+
+Việc so sánh hàm quyết định được thực hiện trên bộ mã hóa CNN 1D đã được chọn ở các phần trước. Để xác nhận lựa chọn kiến trúc không bị thay đổi bởi hàm chấm điểm mới, đề tài kiểm tra lại ba kiến trúc backbone dưới hàm \textit{cos\_znorm} và quan sát thấy CNN 1D vẫn cho EER tập mở thấp nhất, nhất quán với kết luận rút ra dưới hàm cơ sở.
+
+\section{Lựa chọn cấu hình triển khai}
+\label{sec:luachon}
+
+Từ các kết quả trên, đề tài lựa chọn cấu hình triển khai gồm kiến trúc CNN 1D, sử dụng nhánh quán tính, cấu hình ngữ cảnh toàn bộ ba hoạt động và hàm quyết định \textit{cos\_znorm}. Lựa chọn này dựa trên bốn căn cứ. Thứ nhất, CNN 1D cho hiệu năng tốt nhất ở kịch bản tập mở, vốn là kịch bản phản ánh đúng mục tiêu phát hiện người lạ của đề tài. Thứ hai, trong điều kiện dữ liệu hiện có, nhánh quán tính vượt trội so với nhánh tương tác và cấu hình dung hợp ở cả hai kịch bản; do nhánh touch còn bị giới hạn bởi dữ liệu và tiền xử lý như đã phân tích ở Phần~\ref{sec:ketqua}, việc dùng riêng nhánh quán tính vừa tránh bị nhánh yếu kéo xuống vừa đơn giản hóa hệ thống triển khai. Đây là lựa chọn phù hợp với dữ liệu hiện tại, chứ không loại trừ khả năng nhánh tương tác đóng góp khi được cải thiện. Thứ ba, như đã phân tích ở Chương 4, CNN 1D cũng là kiến trúc gọn nhẹ nhất, phù hợp với yêu cầu suy luận trực tiếp trên thiết bị. Thứ tư, như phân tích ở Phần~\ref{sec:scorer}, hàm quyết định \textit{cos\_znorm} cho tỉ lệ lỗi cân bằng tập mở thấp nhất trong khi không làm thay đổi đường triển khai trên thiết bị.
+
+Với cấu hình được chọn, hệ thống đạt tỉ lệ lỗi cân bằng tập mở trung bình khoảng $1,39\% \pm 2,40\%$ qua kiểm thử chéo leave-users-out (sáu vòng) và khoảng 0,34\% ở kịch bản tập đóng. Cần nhìn nhận các con số này một cách thận trọng: chúng được đo ở mức phiên trên bộ dữ liệu 26 người, với số lần thử của người lạ trong mỗi vòng còn nhỏ, nên độ lệch chuẩn vẫn ở mức vài phần trăm và hiệu năng chưa thực sự đồng đều giữa các cá nhân. Do đó, kết quả nên được hiểu là bằng chứng hứa hẹn trong điều kiện thực nghiệm, chứ chưa phải khẳng định về một hệ thống bảo mật đã sẵn sàng triển khai diện rộng. Việc kiểm thử trên quy mô người dùng lớn hơn và trước các kịch bản tấn công chủ động là cần thiết trước khi đưa vào sử dụng thực tế. Một lưu ý về cấu hình anchor: kết quả đánh giá trong chương này được tính với sáu anchor đại diện cho mỗi chủ sở hữu (chọn thưa từ các cửa sổ đăng ký) nhằm giảm chi phí tính toán, trong khi bản triển khai trên thiết bị ở Chương 6 giữ toàn bộ 20 cửa sổ đăng ký làm anchor để bao quát tốt hơn biến thiên tự nhiên của chủ máy. Do đó các con số ở đây nên được hiểu là ước lượng ứng với cấu hình sáu anchor; việc đánh giá định lượng trực tiếp cấu hình 20 anchor là một bước kiểm chứng nên thực hiện để khẳng định hiệu năng đúng như bản triển khai. Cấu hình đã chọn được hiện thực hóa trên ứng dụng Android trong Chương 6.
+
+\section{So sánh với các công trình liên quan}
+\label{sec:sosanh}
+
+Để đặt kết quả của đề tài trong bối cảnh nghiên cứu, Bảng~\ref{tab:sosanh_ketqua} đối chiếu đề tài với bốn công trình tham chiếu đã phân tích ở Chương 2 theo nhiều chiều, gồm cả chỉ số hiệu năng mà từng công trình tự công bố.
+
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.25}
+    \caption{Đối chiếu đề tài với các công trình liên quan}
+    \label{tab:sosanh_ketqua}
+    \begin{tabularx}{\textwidth}{|R{1.00}|R{1.15}|R{0.90}|R{0.85}|R{1.50}|R{0.95}|R{0.65}|}
+    \hline
+    \textbf{Công trình} & \textbf{Dữ liệu} & \textbf{Phương thức} & \textbf{Kịch bản} & \textbf{Chỉ số tự công bố (dataset riêng)} & \textbf{Triển khai} & \textbf{Dự phòng} \\
+    \hline
+    IntelliAuth \cite{intelliauth} & Tự thu, 6 hoạt động & Quán tính & Tập đóng & Accuracy $\approx$97,95\% (SVM) & Không nêu & Không \\
+    \hline
+    B2auth \cite{b2auth} & 60 người, 34.621 chạm, in-the-wild & Touch & Tập đóng & Theo từng ngữ cảnh ứng dụng (không có EER tổng) & Cloud train, on-device & Không \\
+    \hline
+    MultiLock \cite{multilock} & UMDAA-02, 48 người & 7 kênh & Tập đóng (active) & Accuracy 82,2--97,1\%; EER 2,9\% & Không nêu & Khóa màn hình \\
+    \hline
+    M2Auth \cite{m2auth} & 52 người, 5,5 triệu điểm & Đa phương thức & Tập đóng & EER 0,84\%; accuracy 99,98\% & Không nêu & Không \\
+    \hline
+    Đề tài & 26 người, 19 dòng máy, in-the-wild & Quán tính (triển khai) & Tập mở + tập đóng & EER $\approx$0,3\% (đóng) / $\approx$1,4\% (mở); 6 anchor, leave-users-out & On-device TFLite & Cử chỉ lắc \\
+    \hline
+    \end{tabularx}
+\end{table}
+
+Cần nhấn mạnh rằng các con số hiệu năng trong Bảng~\ref{tab:sosanh_ketqua} được đo trên những bộ dữ liệu, giao thức và chỉ số khác nhau, nên không so sánh trực tiếp với nhau: một EER thấp trên một bộ dữ liệu dễ không có nghĩa là phương pháp tốt hơn một EER cao hơn trên bộ dữ liệu khó hơn. Khác biệt quan trọng nhất là kịch bản đánh giá: phần lớn các công trình tham chiếu vận hành ở kịch bản tập đóng (kể cả M2Auth với EER 0,84\% và MultiLock với EER 2,9\%), trong khi đề tài hướng tới kịch bản tập mở vốn khó hơn nhiều. Do đó một tỉ lệ lỗi tập mở cao hơn không đồng nghĩa với mô hình kém hơn, mà phản ánh một bài toán khắt khe hơn.
+
+Vì lẽ đó, so sánh ở đây nên được đọc theo các chiều mang ý nghĩa xuyên dataset hơn là theo con số tuyệt đối. Về mặt phương pháp, các công trình tham chiếu chủ yếu hoạt động ở tập đóng và phần lớn thiếu cả khả năng phát hiện người lạ lẫn cơ chế xác thực dự phòng; đề tài là hệ thống duy nhất kết hợp đồng thời nhận dạng tập mở, khai thác ngữ cảnh hoạt động và cơ chế dự phòng bằng cử chỉ, đồng thời triển khai suy luận trực tiếp trên thiết bị. Về độ thực tế của dữ liệu, bộ dữ liệu của đề tài tuy nhỏ hơn về số người so với M2Auth hay B2auth, nhưng được thu trong điều kiện sử dụng tự nhiên trên 19 dòng thiết bị khác nhau, hướng tới khả năng tổng quát hóa giữa các phần cứng. Về con số, trong điều kiện riêng của mình, đề tài đạt tỉ lệ lỗi cùng cỡ độ lớn với các công trình tốt nhất, nhưng ở kịch bản tập mở khắt khe hơn; điều này chỉ nên xem là tham chiếu định tính chứ không phải bằng chứng vượt trội.
+
+Để có một so sánh định lượng chặt chẽ theo kiểu đối chứng trực tiếp, cần đánh giá đề tài trên một bộ dữ liệu công khai mà các công trình đã sử dụng (chẳng hạn UMDAA-02 của MultiLock) hoặc cài lại các baseline trên chính bộ dữ liệu của đề tài, sao cho mọi phương pháp được đo dưới cùng dataset và giao thức. Đây là một hướng kiểm chứng được đề xuất trong Chương 7.
+
+\end{document}

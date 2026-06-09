@@ -92,23 +92,35 @@ class SensorWindowCollector(context: Context) : SensorEventListener {
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
     private fun buildWindow(endTimestampMs: Long): SensorWindow? {
-        if (accBuf.size() < 60 || gyroBuf.size() < 60) {
-            Log.w(TAG, "Too few samples — acc=${accBuf.size()}, gyro=${gyroBuf.size()}. Discarding.")
+        val nAcc = accBuf.size()
+        if (nAcc < SensorWindow.TIMESTEPS || gyroBuf.size() < 60) {
+            Log.w(TAG, "Too few samples — acc=$nAcc, gyro=${gyroBuf.size()}. Discarding.")
             return null
         }
 
+        // Lấy TRỰC TIẾP TIMESTEPS mẫu gia tốc kế thô gần nhất ở tần số gốc của
+        // thiết bị. Gyro/mag được căn theo dấu thời gian của từng mẫu acc để
+        // đồng bộ ba cảm biến bất đồng bộ về cùng hàng.
         val data = FloatArray(SensorWindow.TIMESTEPS * SensorWindow.CHANNELS)
-
-        val tStart = accBuf.firstTimestamp()
-        val tEnd = accBuf.lastTimestamp()
-        if (tEnd <= tStart) return null
-
-        val binWidth = (tEnd - tStart).toFloat() / SensorWindow.TIMESTEPS
-
-        fillChannel(data, accBuf, tStart, binWidth, SensorWindow.CH_ACC_X, SensorWindow.CH_ACC_Y, SensorWindow.CH_ACC_Z)
-        fillChannel(data, gyroBuf, tStart, binWidth, SensorWindow.CH_GYRO_X, SensorWindow.CH_GYRO_Y, SensorWindow.CH_GYRO_Z)
-        if (magBuf.size() > 0) {
-            fillChannel(data, magBuf, tStart, binWidth, SensorWindow.CH_MAG_X, SensorWindow.CH_MAG_Y, SensorWindow.CH_MAG_Z)
+        val start = nAcc - SensorWindow.TIMESTEPS
+        for (i in 0 until SensorWindow.TIMESTEPS) {
+            val idx = start + i
+            val tMs = accBuf.timestampAt(idx)
+            val a = accBuf.valueAt(idx)
+            val row = i * SensorWindow.CHANNELS
+            data[row + SensorWindow.CH_ACC_X] = a[0]
+            data[row + SensorWindow.CH_ACC_Y] = a[1]
+            data[row + SensorWindow.CH_ACC_Z] = a[2]
+            gyroBuf.alignAt(tMs)?.let {
+                data[row + SensorWindow.CH_GYRO_X] = it[0]
+                data[row + SensorWindow.CH_GYRO_Y] = it[1]
+                data[row + SensorWindow.CH_GYRO_Z] = it[2]
+            }
+            if (magBuf.size() > 0) magBuf.alignAt(tMs)?.let {
+                data[row + SensorWindow.CH_MAG_X] = it[0]
+                data[row + SensorWindow.CH_MAG_Y] = it[1]
+                data[row + SensorWindow.CH_MAG_Z] = it[2]
+            }
         }
 
         return SensorWindow(
@@ -116,52 +128,6 @@ class SensorWindowCollector(context: Context) : SensorEventListener {
             startTimestampMs = endTimestampMs - WINDOW_SECONDS * 1000L,
             endTimestampMs = endTimestampMs,
         )
-    }
-
-    private fun fillChannel(
-        out: FloatArray,
-        buf: RawChannelBuffer,
-        tStart: Long,
-        binWidth: Float,
-        chX: Int, chY: Int, chZ: Int,
-    ) {
-        var lastX = 0f; var lastY = 0f; var lastZ = 0f
-        var anyFilled = false
-
-        for (binIdx in 0 until SensorWindow.TIMESTEPS) {
-            val binStart = tStart + (binIdx * binWidth).toLong()
-            val binEnd = tStart + ((binIdx + 1) * binWidth).toLong()
-
-            val avg = buf.averageInRange(binStart, binEnd)
-            if (avg != null) {
-                lastX = avg[0]; lastY = avg[1]; lastZ = avg[2]; anyFilled = true
-            }
-            val rowOffset = binIdx * SensorWindow.CHANNELS
-            out[rowOffset + chX] = lastX
-            out[rowOffset + chY] = lastY
-            out[rowOffset + chZ] = lastZ
-        }
-
-        if (anyFilled) {
-            var firstFilledBin = 0
-            while (firstFilledBin < SensorWindow.TIMESTEPS) {
-                val rowOffset = firstFilledBin * SensorWindow.CHANNELS
-                if (out[rowOffset + chX] != 0f || out[rowOffset + chY] != 0f || out[rowOffset + chZ] != 0f) break
-                firstFilledBin++
-            }
-            if (firstFilledBin in 1 until SensorWindow.TIMESTEPS) {
-                val srcOffset = firstFilledBin * SensorWindow.CHANNELS
-                val srcX = out[srcOffset + chX]
-                val srcY = out[srcOffset + chY]
-                val srcZ = out[srcOffset + chZ]
-                for (i in 0 until firstFilledBin) {
-                    val rowOffset = i * SensorWindow.CHANNELS
-                    out[rowOffset + chX] = srcX
-                    out[rowOffset + chY] = srcY
-                    out[rowOffset + chZ] = srcZ
-                }
-            }
-        }
     }
 
     private class RawChannelBuffer(capacity: Int) {
@@ -176,21 +142,38 @@ class SensorWindowCollector(context: Context) : SensorEventListener {
         fun size() = n
         fun firstTimestamp(): Long = if (n > 0) ts[0] else 0L
         fun lastTimestamp(): Long = if (n > 0) ts[n - 1] else 0L
+        fun timestampAt(i: Int): Long = ts[i]
+        fun valueAt(i: Int): FloatArray = floatArrayOf(x[i], y[i], z[i])
 
         fun add(timestampMs: Long, vx: Float, vy: Float, vz: Float) {
             if (n >= ts.size) return
             ts[n] = timestampMs; x[n] = vx; y[n] = vy; z[n] = vz; n++
         }
 
-        fun averageInRange(start: Long, end: Long): FloatArray? {
-            var sx = 0f; var sy = 0f; var sz = 0f; var k = 0
-            for (i in 0 until n) {
-                val t = ts[i]
-                if (t in start until end) {
-                    sx += x[i]; sy += y[i]; sz += z[i]; k++
-                }
+        /**
+         * Căn giá trị cảm biến về thời điểm targetMs (dấu thời gian của mẫu acc)
+         * bằng nội suy tuyến tính giữa hai mẫu gần nhất, nhằm đồng bộ các cảm biến
+         * bất đồng bộ về cùng một hàng. Đây là bước CĂN ĐỒNG BỘ, không phải chuẩn
+         * hóa lại tần số. Trả null nếu buffer rỗng; ngoài biên thì kẹp về mẫu đầu/cuối.
+         */
+        fun alignAt(targetMs: Long): FloatArray? {
+            if (n == 0) return null
+            if (targetMs <= ts[0]) return floatArrayOf(x[0], y[0], z[0])
+            if (targetMs >= ts[n - 1]) return floatArrayOf(x[n - 1], y[n - 1], z[n - 1])
+            // tìm i sao cho ts[i] <= targetMs < ts[i+1] (buffer đã theo thứ tự thời gian)
+            var lo = 0; var hi = n - 1
+            while (lo + 1 < hi) {
+                val mid = (lo + hi) ushr 1
+                if (ts[mid] <= targetMs) lo = mid else hi = mid
             }
-            return if (k == 0) null else floatArrayOf(sx / k, sy / k, sz / k)
+            val t0 = ts[lo]; val t1 = ts[lo + 1]
+            val span = (t1 - t0).toFloat()
+            val frac = if (span > 0f) (targetMs - t0).toFloat() / span else 0f
+            return floatArrayOf(
+                x[lo] + (x[lo + 1] - x[lo]) * frac,
+                y[lo] + (y[lo + 1] - y[lo]) * frac,
+                z[lo] + (z[lo + 1] - z[lo]) * frac,
+            )
         }
     }
 

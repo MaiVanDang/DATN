@@ -1,0 +1,148 @@
+\documentclass[../DoAn.tex]{subfiles}
+\begin{document}
+
+Chương này trình bày nền tảng lý thuyết và tổng quan các công trình liên quan làm cơ sở cho hệ thống được xây dựng trong đề tài. Phần \ref{sec:bbthoai} giới thiệu nguyên lý sinh trắc học hành vi và ưu nhược điểm của hướng tiếp cận này. Phần \ref{sec:congtrinh} phân tích bốn công trình tiêu biểu và chỉ ra khoảng trống nghiên cứu mà đề tài hướng tới. Phần \ref{sec:cambien} mô tả đặc điểm dữ liệu cảm biến và tương tác màn hình trên Android. Phần \ref{sec:mohinh} trình bày các mô hình học máy được sử dụng trong hệ thống. Phần \ref{sec:openset} giới thiệu bài toán nhận dạng tập mở và cơ chế xác thực liên tục. Phần \ref{sec:tflite} trình bày nền tảng triển khai on-device thông qua TensorFlow Lite.
+
+\section{Sinh trắc học hành vi}
+\label{sec:bbthoai}
+
+Sinh trắc học hành vi (\textit{behavioral biometrics}) là lĩnh vực nghiên cứu nhận diện hoặc xác thực danh tính cá nhân dựa trên các đặc trưng hành vi - tức cách một người tương tác với thiết bị hoặc thực hiện các hoạt động thể chất - thay vì dựa trên các đặc trưng sinh lý cố định như vân tay hay khuôn mặt. Điểm khác biệt căn bản của hướng tiếp cận này là các đặc trưng mang tính động, có thể thay đổi theo thời gian và ngữ cảnh sử dụng, nhưng vẫn duy trì một mẫu hành vi đủ ổn định để phân biệt giữa các cá nhân. Trong bối cảnh thiết bị di động, sinh trắc học hành vi thường được phân loại theo ba nhóm nguồn dữ liệu chính: (i) hành vi vận động như nhận dạng dáng đi và cách cầm điện thoại, (ii) hành vi tương tác màn hình như động học chạm và cuộn, và (iii) hành vi gõ phím. Đề tài này khai thác đồng thời cả ba nhóm dữ liệu trên nhằm tận dụng tính bổ sung lẫn nhau giữa các nguồn tín hiệu, từ đó xây dựng hệ thống xác thực đa phương thức toàn diện.
+
+So với các phương pháp xác thực truyền thống, sinh trắc học hành vi có ưu điểm nổi bật là khả năng xác thực liên tục và trong suốt: hệ thống giám sát người dùng trong nền mà không yêu cầu thao tác chủ động từ phía họ. Ngoài ra, phương pháp này không đòi hỏi phần cứng chuyên dụng mà chỉ sử dụng các cảm biến cơ bản vốn đã được tích hợp sẵn trên hầu hết điện thoại thông minh hiện đại. Tuy nhiên, một số hạn chế vẫn cần được xem xét. Hành vi người dùng có thể biến thiên theo thời gian do mệt mỏi, thay đổi thói quen hoặc khác biệt về môi trường sử dụng, dẫn đến nhu cầu cập nhật mô hình định kỳ. Bên cạnh đó, các hệ thống chỉ dựa trên cảm biến chuyển động tồn tại điểm yếu trong các tình huống thiết bị đứng yên, chẳng hạn khi kẻ tấn công đặt cố định thiết bị để thực hiện truy cập trái phép. Đây cũng là lý do cốt lõi dẫn đến việc thiết kế hệ thống xác thực đa phương thức trong đề tài này.
+
+\section{Các công trình liên quan}
+\label{sec:congtrinh}
+
+\subsection{IntelliAuth - Xác thực theo ngữ cảnh hoạt động}
+
+IntelliAuth~\cite{intelliauth} đề xuất hệ thống xác thực người dùng smartphone dựa trên nhận diện sáu hoạt động thường ngày thông qua dữ liệu từ accelerometer, gyroscope và magnetometer. Đóng góp nổi bật của công trình là chỉ ra rằng hành vi sử dụng điện thoại phụ thuộc mạnh vào ngữ cảnh hoạt động của người dùng, từ đó xây dựng một tầng nhận diện ngữ cảnh riêng nhằm cải thiện độ chính xác xác thực bằng bốn thuật toán phân loại gồm DT, KNN, BN và SVM. Tuy nhiên, hệ thống vẫn hoạt động trong khung bài toán tập đóng, chưa có cơ chế xử lý các đối tượng chưa từng xuất hiện trong tập huấn luyện, chưa khai thác dữ liệu tương tác màn hình và chưa hỗ trợ xác thực liên tục. Đề tài này kế thừa quan sát rằng hành vi sử dụng điện thoại phụ thuộc vào ngữ cảnh hoạt động, và khai thác quan sát đó bằng cách thu thập dữ liệu có gán nhãn hoạt động rồi huấn luyện, đánh giá theo từng ngữ cảnh, thay vì xây dựng một tầng phân loại ngữ cảnh hoạt động trực tuyến như IntelliAuth.
+
+\subsection{B2auth - Sinh trắc học cảm ứng trong điều kiện thực tế}
+
+B2auth~\cite{b2auth} tập trung vào sinh trắc học màn hình cảm ứng trong điều kiện triển khai thực tế với 60 người dùng và 34.621 sự kiện chạm. Kiến trúc huấn luyện trên đám mây kết hợp với suy luận trên thiết bị (\textit{cloud training, on-device inference}) giúp giải quyết đồng thời ba vấn đề: bảo vệ quyền riêng tư, giảm độ trễ suy luận và đảm bảo khả năng hoạt động ngoại tuyến. Hạn chế chính của B2auth là chỉ dựa trên dữ liệu màn hình cảm ứng mà chưa khai thác cảm biến quán tính, do đó hiệu quả có thể suy giảm khi người dùng không tương tác với màn hình. Đề tài kế thừa kiến trúc suy luận trên thiết bị thông qua TFLite và phương pháp trích xuất đặc trưng động học từ dữ liệu chạm của công trình này.
+
+\subsection{MultiLock - Xác thực chủ động đa phương thức liên tục}
+
+MultiLock~\cite{multilock} đề xuất khung xác thực liên tục trên cơ sở dữ liệu UMDAA-02 gồm 48 người dùng, tích hợp 7 nguồn dữ liệu bao gồm cử chỉ chạm, động học gõ phím, accelerometer, gyroscope, WiFi, GPS và lịch sử sử dụng ứng dụng. Điểm tin cậy được tích lũy qua nhiều phiên liên tiếp bằng thuật toán QCD (\textit{Quickest Change Detection}), tạo thành cơ chế xác thực liên tục có hệ thống. Tuy nhiên, phản ứng khi phát hiện người lạ còn đơn giản: hệ thống chủ yếu dừng ở việc khóa màn hình mà chưa có cơ chế xác thực dự phòng để khôi phục phiên sử dụng. Ngoài ra, hệ thống chưa hỗ trợ nhận dạng tập mở. Đề tài kế thừa cơ chế xác thực liên tục dựa trên điểm tin cậy tích lũy qua nhiều phiên của MultiLock và mở rộng bằng cơ chế xác thực dự phòng hoàn chỉnh hơn.
+
+\subsection{M2Auth - Xác thực đa phương thức từ cảm biến và cảm ứng}
+
+M2Auth~\cite{m2auth} đề xuất hệ thống xác thực đa phương thức bằng cách kết hợp dữ liệu từ cảm biến quán tính và tương tác chạm, thực hiện dung hợp ở mức điểm số nhằm tận dụng tính bổ sung giữa chuyển động cơ thể và cách tương tác màn hình. Kết quả thực nghiệm cho thấy việc kết hợp đa phương thức cải thiện đáng kể hiệu năng so với các mô hình đơn phương thức. Hạn chế của M2Auth là tập trung vào bài toán phân loại tập đóng, chưa hỗ trợ phát hiện người lạ và chưa đề xuất cơ chế phản ứng khi phát hiện bất thường. Đề tài kế thừa ý tưởng dung hợp đa phương thức ở mức điểm số và mở rộng theo hướng xác thực liên tục, phát hiện người lạ và cơ chế xác thực dự phòng.
+
+\subsection{Tổng hợp và khoảng trống nghiên cứu}
+
+Qua phân tích bốn công trình trên, có thể thấy chưa có nghiên cứu nào đồng thời kết hợp đầy đủ năm yếu tố: (i) dữ liệu đa phương thức từ cảm biến quán tính và tương tác màn hình, (ii) khai thác ngữ cảnh hoạt động, (iii) xác thực liên tục, (iv) nhận dạng tập mở và (v) cơ chế xác thực dự phòng dựa trên hành vi. Đề tài này không hướng tới khẳng định tính mới tuyệt đối của mô hình xác thực đa phương thức, mà tập trung giải quyết khoảng trống cụ thể nói trên bằng cách xây dựng một hệ thống tích hợp hoàn chỉnh. Bảng~\ref{tab:related_work_compare} tổng hợp so sánh các công trình liên quan với hệ thống đề xuất.
+
+\begin{table}[H]
+    \centering
+    \caption{So sánh các công trình liên quan và hệ thống đề xuất}
+    \label{tab:related_work_compare}
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|c|c|c|c|c|}
+    \hline
+    \textbf{Tiêu chí} & \textbf{Intelli [1]} & \textbf{B2auth [2]} 
+        & \textbf{Multi [3]} & \textbf{M2Auth [4]} & \textbf{Đề tài} \\
+    \hline
+    Cảm biến quán tính   & Có    & Không & Có    & Có    & Có \\
+    \hline
+    Tương tác màn hình   & Không & Có    & Có    & Có    & Có \\
+    \hline
+    Ngữ cảnh hoạt động   & Có    & Không & Không & Không & Có \\
+    \hline
+    Nhận dạng tập mở     & Không & Không & Không & Không & Có \\
+    \hline
+    Xác thực liên tục    & Không & Có    & Có    & Có    & Có \\
+    \hline
+    Xác thực dự phòng    & Không & Không 
+        & \makecell{Khóa\\màn hình} & Không 
+        & \makecell{Cử chỉ\\lắc} \\
+    \hline
+    Mô hình chính        & \makecell{BayesNet/\\SVM} 
+        & \makecell{MLP/\\TFLite} & \makecell{SVM+\\QCD} 
+        & \makecell{Fusion\\model} & \makecell{CNN 1D\\(inertial)} \\
+    \hline
+    \end{tabularx}
+\end{table}
+
+\section{Dữ liệu cảm biến và tương tác trên Android}
+\label{sec:cambien}
+
+\subsection{Cảm biến chuyển động}
+
+Thiết bị Android hiện đại tích hợp ba cảm biến quán tính chính phục vụ bài toán nhận diện hành vi. Gia tốc kế (\textit{accelerometer}) đo gia tốc tuyến tính theo ba trục tọa độ $(x, y, z)$ với đơn vị $m/s^2$, phản ánh chuyển động tịnh tiến và rung lắc của thiết bị. Con quay hồi chuyển 
+(\textit{gyroscope}) đo vận tốc góc theo ba trục, cung cấp thông tin về 
+chuyển động xoay và độ nghiêng. Cảm biến từ trường (\textit{magnetometer}) 
+đo cường độ từ trường xung quanh, hỗ trợ xác định hướng tuyệt đối của 
+thiết bị trong không gian. Sự kết hợp của ba cảm biến trên tạo thành bộ 
+dữ liệu chuyển động gồm 9 kênh tín hiệu, là nền tảng cho các mô hình xác 
+thực người dùng trong đề tài.
+
+\subsection{Dữ liệu tương tác màn hình}
+
+Khi người dùng chạm vào màn hình, Android ghi nhận một chuỗi sự kiện liên tục bao gồm các trạng thái chạm xuống (\texttt{DOWN}), di chuyển (\texttt{MOVE}) và nhấc tay (\texttt{UP}). Mỗi sự kiện chứa tọa độ $(x, y)$, áp lực tiếp xúc, diện tích tiếp xúc và dấu thời gian với độ chính xác đến mili giây. Từ một chuỗi sự kiện hoàn chỉnh có thể trích xuất nhiều đặc trưng hành vi. Trong đề tài, tập đặc trưng được sử dụng gồm: với thao tác chạm là thời gian giữ (\textit{hold}), độ dịch chuyển và khoảng thời gian giữa các lần chạm; với thao tác cuộn là thời lượng, độ dài và độ thẳng quỹ đạo, vận tốc trung bình và cực đại cùng hướng cuộn; với gõ phím là khoảng thời gian giữa các phím, tốc độ gõ và tỉ lệ xóa. Áp lực và diện tích tiếp xúc tuy được ghi nhận ở mức sự kiện nhưng không được đưa vào tập đặc trưng huấn luyện, do trên phần lớn thiết bị thu thập các giá trị này gần như không đổi nên ít mang thông tin phân biệt. Dữ liệu tương tác màn hình được thu thập qua ba loại tác vụ chuẩn hóa: câu hỏi trắc nghiệm để lấy tap dynamics, câu hỏi nhập văn bản để lấy keystroke dynamics và danh sách cuộn dài để lấy scroll dynamics. Cách tiếp cận này đảm bảo tính nhất quán giữa các người tham gia, đồng thời tránh các vấn đề liên quan đến quyền truy cập hệ thống trên Android 10 trở lên.
+
+\subsection{Quy trình thu thập dữ liệu}
+
+Android cung cấp API \texttt{SensorManager} cho phép đăng ký lắng nghe sự kiện cảm biến ở nhiều mức tần số. Dữ liệu trong đề tài được thu ở chế độ \\
+\texttt{SENSOR\_DELAY\_GAME}, tương ứng tần số lấy mẫu xấp xỉ 50 Hz và dao động tùy thiết bị. Bước tiền xử lý phân đoạn tín hiệu thành các cửa sổ cố định 200 mẫu (tương ứng khoảng 4 giây ở 50 Hz) theo số mẫu.
+
+Bộ dữ liệu huấn luyện được thu một cách chủ động theo phiên bằng một ứng dụng chuyên dụng (trình bày chi tiết trong Chương 3). Người tham gia lần lượt thực hiện ba hoạt động đi bộ, đứng và ngồi với thời lượng mục tiêu mặc định 360 giây cho mỗi hoạt động, có thể điều chỉnh trong giao diện; dữ liệu được ghi liên tục qua \texttt{SensorForegroundService} kiểu \texttt{START\_STICKY} và gắn nhãn theo hoạt động. Quy trình tạo dữ liệu huấn luyện không sử dụng cảm biến \texttt{Significant Motion}; cơ chế thu thụ động theo sự kiện, tức chỉ kích hoạt khi phát hiện chuyển động đáng kể và có khoảng chờ giữa hai phiên, chỉ thuộc về ứng dụng xác thực lúc vận hành thực tế chứ không phải khâu xây dựng tập huấn luyện.
+
+Một hạn chế đã biết là độ dài thời gian thực của một cửa sổ 200 mẫu có thể chênh lệch giữa các thiết bị có tần số lấy mẫu khác nhau, và đây là một trong những yếu tố có thể góp phần làm tăng sai số ở kịch bản nhận dạng tập mở.
+
+\section{Các mô hình học máy trong hệ thống}
+\label{sec:mohinh}
+
+\subsection{Mạng CNN 1D cho dữ liệu chuỗi thời gian}
+
+Mạng tích chập một chiều (1D CNN) được lựa chọn làm kiến trúc backbone nhờ khả năng học đặc trưng cục bộ trực tiếp từ tín hiệu thô mà không cần trích xuất đặc trưng thủ công. Các bộ lọc tích chập trượt theo chiều thời gian, cho phép phát hiện các mẫu cục bộ đặc trưng như đỉnh gia tốc hay nhịp bước chân. Đầu vào của mô hình là tensor kích thước $[\text{số mẫu} \times \text{số kênh}]$ (ví dụ $200 \times 9$, tức 200 mẫu tương ứng khoảng 4 giây ở 50 Hz trên 9 kênh cảm biến), cho phép mô hình học đồng thời mối quan hệ theo thời gian và tương quan giữa các kênh. So với LSTM thuần túy, CNN 1D có tốc độ huấn luyện và suy luận nhanh hơn đáng kể, phù hợp với yêu cầu on-device inference của đề tài.
+
+\subsection{CNN-LSTM và CNN-BiLSTM}
+
+Bên cạnh CNN 1D thuần túy, đề tài khảo sát thêm hai biến thể kết hợp đặc trưng cục bộ với mô hình hóa quan hệ thời gian. Kiến trúc thứ nhất, ký hiệu CNN-LSTM, dùng hai lớp tích chập một chiều để trích xuất đặc trưng cục bộ và rút gọn độ dài chuỗi, sau đó đưa qua một lớp LSTM để học phụ thuộc thời gian dài hạn dọc theo chuỗi. Kiến trúc thứ hai, CNN-BiLSTM, thay LSTM một chiều bằng LSTM hai chiều, giúp mỗi bước thời gian tổng hợp được thông tin từ cả quá khứ và tương lai.
+
+Cần lưu ý rằng đây là các kiến trúc lai \textit{tuần tự}, tức tích chập trước rồi mới đến mạng hồi tiếp, khác với mô hình ConvLSTM của Shi và cộng sự (2015) vốn đặt phép tích chập ngay bên trong các cổng của ô LSTM. Trong mã nguồn, hai biến thể này được đặt tên là \texttt{convlstm} và \texttt{convlstm\_bi} theo quy ước nội bộ; báo cáo thống nhất gọi chúng là CNN-LSTM và CNN-BiLSTM để mô tả đúng bản chất kiến trúc nối tiếp.
+
+So với CNN 1D thuần túy, hai biến thể này có khả năng mô hình hóa chuỗi tốt hơn nhưng đi kèm chi phí tính toán cao hơn và rủi ro quá khớp lớn hơn trên tập dữ liệu có kích thước vừa phải. Việc so sánh ba kiến trúc CNN 1D, CNN-LSTM và CNN-BiLSTM là một trong những mục tiêu nghiên cứu của đề tài.
+
+\subsection{Random Forest cho dữ liệu touch}
+
+Random Forest là thuật toán học máy tập hợp hoạt động bằng cách xây dựng nhiều cây quyết định trong quá trình huấn luyện. Thuật toán này phù hợp để phân loại các vector đặc trưng có số chiều vừa phải như động học chạm (\textit{touch dynamics}) nhờ khả năng chống quá khớp tốt và không yêu cầu chuẩn hóa đặc trưng đầu vào. Việc mô tả mỗi thao tác vuốt hay chạm bằng một vector đặc trưng động học rồi phân loại theo từng cá nhân là cách tiếp cận đã được chứng minh hiệu quả cho sinh trắc học chạm liên tục~\cite{frank2013touchalytics}. Random Forest được lựa chọn cho nhánh touch thay vì mạng học sâu vì tập dữ liệu touch có kích thước nhỏ hơn đáng kể so với dữ liệu IMU, và một mô hình đơn giản giúp hạn chế quá khớp trên lượng dữ liệu hạn chế đó.
+
+\subsection{Học biểu diễn phân biệt và chuẩn hóa điểm}
+
+Chất lượng của không gian embedding quyết định trực tiếp khả năng phân biệt người lạ khi quyết định dựa trên độ tương đồng. Hàm mất mát entropy chéo thông thường chỉ yêu cầu phân loại đúng các danh tính trong tập huấn luyện, không ràng buộc khoảng cách giữa các lớp, nên embedding học được có thể chưa đủ tách bạch cho danh tính chưa gặp. Các hàm mất mát dựa trên biên góc, tiêu biểu là ArcFace~\cite{deng2019arcface}, bổ sung một biên góc giữa các lớp trên mặt cầu đơn vị nhằm tăng độ nén trong lớp và độ tách giữa các lớp; do quyết định của hệ thống dựa trên độ tương đồng cosine, hướng tiếp cận này phù hợp về mặt hình học để cải thiện khả năng tổng quát hóa, và được xem là một hướng nâng cấp bộ mã hóa trong tương lai.
+
+Bên cạnh việc cải thiện biểu diễn, điểm tin cậy đầu ra cũng có thể được hiệu chỉnh để tách bạch tốt hơn. Một kỹ thuật kinh điển trong xác thực người nói là chuẩn hóa điểm theo một nhóm người dùng nền: điểm thô của một mẫu được chuẩn hóa theo phân bố điểm mà nhóm nền tạo ra, nhằm loại bỏ độ lệch riêng của từng hồ sơ và đưa điểm của các chủ sở hữu khác nhau về cùng một thang~\cite{auckenthaler2000score}. Kỹ thuật này không yêu cầu huấn luyện lại mô hình và được khảo sát ở Chương 5 như một hàm quyết định ứng viên.
+
+\subsection{Dung hợp đa phương thức và EWMA}
+
+Kết hợp ở mức điểm số (\textit{score-level fusion}) là kỹ thuật tổ hợp kết quả từ nhiều nguồn dữ liệu bằng cách kết hợp điểm tin cậy đầu ra của từng mô hình. Đề tài khảo sát cấu hình đa phương thức trong đó điểm từ nhánh IMU và điểm từ nhánh touch được tổ hợp bằng trung bình có trọng số, với trọng số được tìm kiếm trên tập kiểm định nhằm tối đa hóa AUC.
+
+Để ổn định quyết định theo thời gian, điểm tin cậy được làm mịn bằng trung bình động trọng số mũ (\textit{Exponentially Weighted Moving Average} - EWMA): mẫu mới nhất nhận trọng số lớn nhất, các mẫu cũ giảm dần theo lũy thừa của hệ số làm mượt. Cơ chế này giúp hệ thống tránh phản ứng quá mức với các dự đoán sai lẻ do nhiễu nhưng vẫn phát hiện kịp thời khi hành vi thay đổi liên tục. Như sẽ phân tích ở Chương 5, việc bổ sung nhánh touch không cải thiện hiệu năng trong kịch bản nhận dạng tập mở, nên cấu hình triển khai cuối cùng chỉ sử dụng nhánh IMU; nhánh touch và dung hợp được giữ lại ở vai trò đối chứng.
+
+\section{Nhận dạng tập mở và xác thực liên tục}
+\label{sec:openset}
+
+\subsection{Bài toán nhận dạng tập mở}
+
+Phần lớn các hệ thống phân loại truyền thống hoạt động trong khung tập đóng (\textit{closed-set}): tập lớp được xác định cố định từ trước và mô hình luôn gán đầu vào vào một trong các lớp đã biết. Cách tiếp cận này chưa phù hợp với triển khai thực tế, nơi mô hình có thể gặp những cá nhân chưa từng xuất hiện trong tập huấn luyện. Nhận dạng tập mở (\textit{open-set recognition}), được hình thức hóa lần đầu bởi Scheirer và cộng sự~\cite{scheirer2013openset}, giải quyết vấn đề này bằng cách trang bị cho mô hình khả năng từ chối khi đầu vào không thuộc bất kỳ danh tính đã biết nào. Bài toán này đòi hỏi khả năng tổng quát hóa mạnh và thường được xử lý bằng cách hiệu chỉnh điểm đầu ra của lớp cuối, chẳng hạn kỹ thuật OpenMax dựa trên lý thuyết giá trị cực trị~\cite{bendale2016openmax}, hoặc bằng điểm năng lượng thay cho xác suất softmax vốn dễ bão hòa với dữ liệu lạ~\cite{liu2020energy}.
+
+Cần phân biệt hai khái niệm độc lập: \textit{tập mở} là kịch bản vận hành, tức xử lý các danh tính chưa từng thấy, còn \textit{1-vs-all} là một cách dựng bộ phân loại nhị phân giữa chủ sở hữu và phần còn lại. Hệ thống trong đề tài vận hành theo kịch bản tập mở nhưng nhánh chính dựa trên cảm biến quán tính không sử dụng 1-vs-all. Thay vào đó, backbone được huấn luyện như bài toán phân loại nhiều người dùng chỉ nhằm học một không gian embedding 128 chiều; sau huấn luyện, tầng phân loại bị loại bỏ và chỉ giữ lại bộ mã hóa. Mỗi chủ sở hữu được đăng ký bằng một tập nhỏ embedding đại diện gọi là anchor; điểm tin cậy của một mẫu được tính từ độ tương đồng cosine trung bình giữa embedding của mẫu với các anchor, sau đó co giãn về khoảng xác suất bằng hàm sigmoid. Cách tiếp cận dựa trên đối sánh mẫu này cho phép đăng ký người dùng mới chỉ bằng vài mẫu mà không cần huấn luyện lại mô hình, phù hợp với việc phân phối sẵn một mô hình dùng chung trong ứng dụng.
+
+Riêng nhánh touch sử dụng bộ phân loại Random Forest theo kiểu 1-vs-all, phân biệt chủ sở hữu với một tập người dùng nền, và chỉ tham gia ở phần đánh giá đối chứng. Ở cả hai nhánh, điểm tin cậy sau khi làm mịn bằng EWMA được so với một ngưỡng quyết định: khi điểm giảm xuống dưới ngưỡng $\theta$, hệ thống chuyển sang trạng thái cảnh báo và kích hoạt cơ chế xác thực dự phòng.
+
+\subsection{Cơ chế xác thực dự phòng bằng cử chỉ}
+
+Khi hệ thống phát hiện dấu hiệu của người lạ, thay vì chỉ khóa màn hình như MultiLock, đề tài đề xuất cơ chế xác thực dự phòng dựa trên cử chỉ lắc điện thoại cá nhân. Người dùng đăng ký trước một mẫu cử chỉ lắc và thực hiện lại mẫu đó khi hệ thống yêu cầu. Quá trình nhận diện được thực hiện thông qua dữ liệu gia tốc kế kết hợp thuật toán phát hiện đỉnh, không yêu cầu phần cứng bổ sung. Cơ chế này đóng kín vòng lặp xác thực theo trình tự: xác thực thụ động $\rightarrow$ phát hiện bất thường $\rightarrow$ xác thực chủ động $\rightarrow$ khôi phục phiên, đồng thời duy trì tính nhất quán của hệ thống khi toàn bộ quá trình đều dựa trên cùng nguồn dữ liệu hành vi.
+
+\section{Triển khai trên thiết bị với TensorFlow Lite}
+\label{sec:tflite}
+
+Nhiều hệ thống xác thực sinh trắc học hiện nay phụ thuộc vào việc gửi dữ liệu hành vi lên máy chủ để suy luận, gây tốn băng thông, tăng độ trễ và đe dọa quyền riêng tư người dùng. Đề tài giải quyết vấn đề này thông qua framework TensorFlow Lite (TFLite), cho phép thực thi mô hình trực tiếp trên phần cứng cục bộ của thiết bị Android, nhờ đó dữ liệu hành vi không rời khỏi thiết bị và hệ thống vẫn hoạt động khi không có kết nối mạng.
+
+TFLite cung cấp một định dạng mô hình gọn nhẹ cùng trình thông dịch được tối ưu cho thiết bị di động, đồng thời hỗ trợ các kỹ thuật nén như lượng tử hóa trọng số nhằm giảm dung lượng và tăng tốc độ suy luận. Trong đề tài, do bộ mã hóa được sử dụng có quy mô nhỏ, mô hình được giữ ở độ chính xác dấu phẩy động 32 bit để bảo toàn chất lượng embedding phục vụ bước đối sánh tương đồng, thay vì lượng tử hóa xuống số nguyên; chi tiết về lựa chọn này được trình bày ở Chương 4. Cách triển khai trên thiết bị như vậy đáp ứng các yêu cầu về quyền riêng tư, độ trễ và tiêu thụ pin cho một ứng dụng xác thực chạy nền liên tục.
+
+Chương này đã trình bày nền tảng lý thuyết và tổng quan công trình liên quan làm cơ sở cho hệ thống đề xuất. Phân tích bốn công trình tham chiếu cho thấy khoảng trống rõ ràng về việc tích hợp đầy đủ xác thực đa phương thức, nhận dạng tập mở và cơ chế xác thực dự phòng trong một hệ thống hoàn chỉnh. Chương 3 tiếp theo sẽ trình bày chi tiết quá trình thu thập dữ liệu và pipeline tiền xử lý làm đầu vào cho hệ thống huấn luyện mô hình.
+
+\end{document}

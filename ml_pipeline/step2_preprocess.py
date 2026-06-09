@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-# ── CONFIG ──────────────────────────────────────────────────────
 HZ          = 50
 WINDOW_SIZE = 4 * HZ
 STRIDE      = 20
@@ -20,12 +19,15 @@ DATA_DIR = Path(__file__).parent / "data"
 PROC_DIR = Path(__file__).parent / "processed"
 
 
-# ════════════════════════════════════════════════════════════════
-# IMU HELPERS
-# ════════════════════════════════════════════════════════════════
-def split_segments(df: pd.DataFrame) -> list[pd.DataFrame]:
+def _ts_info(df: pd.DataFrame):
+    """Trả về (tên cột timestamp, hệ số quy đổi sang giây)."""
     ts_col = "timestamp_ms" if "timestamp_ms" in df.columns else "timestamp_ns"
     to_sec = 1e3 if ts_col == "timestamp_ms" else 1e9
+    return ts_col, to_sec
+
+
+def split_segments(df: pd.DataFrame) -> list[pd.DataFrame]:
+    ts_col, to_sec = _ts_info(df)
     df = df.sort_values(ts_col).reset_index(drop=True)
     diffs = df[ts_col].diff() / to_sec
     gap_idx = list(diffs[diffs > MAX_GAP_SEC].index)
@@ -71,9 +73,6 @@ def stats5(arr, prefix: str) -> dict:
             f"{prefix}_median": med, f"{prefix}_p25": p25, f"{prefix}_p75": p75}
 
 
-# ════════════════════════════════════════════════════════════════
-# IMU — per session
-# ════════════════════════════════════════════════════════════════
 ACTIVITIES = ["walking", "sitting", "standing"]
 
 
@@ -110,9 +109,6 @@ def process_inertial(sess_dir: Path, label: str):
     return (Xw, yw), (Xi, yi)
 
 
-# ════════════════════════════════════════════════════════════════
-# TAP
-# ════════════════════════════════════════════════════════════════
 def process_tap(sess_dir: Path, session_id: str) -> pd.DataFrame:
     rows = []
     for f in sorted(sess_dir.glob("tap_r*.csv")):
@@ -125,7 +121,6 @@ def process_tap(sess_dir: Path, session_id: str) -> pd.DataFrame:
             if df.at[i, "phase"] != "DOWN":
                 i += 1
                 continue
-            # Tìm UP liền kề, bỏ qua MOVE ở giữa
             j = i + 1
             while j < len(df) and df.at[j, "phase"] not in ("DOWN", "UP"):
                 j += 1
@@ -148,9 +143,6 @@ def process_tap(sess_dir: Path, session_id: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-# ════════════════════════════════════════════════════════════════
-# SCROLL
-# ════════════════════════════════════════════════════════════════
 def _gesture_features(g: pd.DataFrame) -> dict | None:
     pts = g[["timestamp_ms", "x", "y"]].values.astype(float)
     if len(pts) < 2:
@@ -164,7 +156,7 @@ def _gesture_features(g: pd.DataFrame) -> dict | None:
     dy     = np.diff(y)
     dt_seg = np.clip(np.diff(t), 1e-3, None)
     seg_d  = np.sqrt(dx ** 2 + dy ** 2)
-    v_seg  = seg_d / dt_seg * 1000     # px/s
+    v_seg  = seg_d / dt_seg * 1000
 
     traj   = float(seg_d.sum())
     v_mean = traj / dt_total * 1000
@@ -231,9 +223,6 @@ def process_scroll(sess_dir: Path, session_id: str) -> pd.DataFrame:
     return pd.DataFrame(gestures)[cols]
 
 
-# ════════════════════════════════════════════════════════════════
-# KEYSTROKE
-# ════════════════════════════════════════════════════════════════
 def process_keystroke(sess_dir: Path, session_id: str) -> pd.DataFrame:
     dfs = []
     for f in sorted(sess_dir.glob("keystroke_r*.csv")):
@@ -248,15 +237,11 @@ def process_keystroke(sess_dir: Path, session_id: str) -> pd.DataFrame:
     return df[["session_id", "inter_key_ms", "is_delete", "timestamp_ms"]]
 
 
-# ════════════════════════════════════════════════════════════════
-# TOUCH SESSION FEATURES (48-D)
-# ════════════════════════════════════════════════════════════════
 def aggregate_touch(tap_df: pd.DataFrame, sc_df: pd.DataFrame,
                     key_df: pd.DataFrame, session_id: str) -> dict:
     """Build 1 feature row 48-D cho 1 session từ 3 modal: tap (16), scroll (23), key (9)."""
     feat = {"session_id": session_id}
 
-    # ── TAP (16) ────────────────────────────────────────────
     tap = tap_df[tap_df["session_id"] == session_id] if not tap_df.empty else pd.DataFrame()
     feat["tap_n"] = len(tap)
     if len(tap) >= 2:
@@ -269,7 +254,6 @@ def aggregate_touch(tap_df: pd.DataFrame, sc_df: pd.DataFrame,
     feat.update(stats5(disp, "tap_disp"))
     feat.update(stats5(iti,  "tap_iti"))
 
-    # ── SCROLL (23) ─────────────────────────────────────────
     sc = sc_df[sc_df["session_id"] == session_id] if not sc_df.empty else pd.DataFrame()
     feat["scroll_n"] = len(sc)
 
@@ -307,7 +291,6 @@ def aggregate_touch(tap_df: pd.DataFrame, sc_df: pd.DataFrame,
         feat["scroll_frac_up"] = feat["scroll_frac_down"] = \
         feat["scroll_frac_left"] = feat["scroll_frac_right"] = np.nan
 
-    # ── KEYSTROKE (9) ────────────────────────────────────────
     kdf = key_df[key_df["session_id"] == session_id] if not key_df.empty else pd.DataFrame()
     n_total = len(kdf)
     if n_total > 0:
@@ -361,9 +344,6 @@ TOUCH_COLS = [
 ]
 
 
-# ════════════════════════════════════════════════════════════════
-# PER-USER PIPELINE
-# ════════════════════════════════════════════════════════════════
 def process_user(user_dir: Path):
     uid     = user_dir.name
     out_dir = PROC_DIR / uid
@@ -427,9 +407,6 @@ def process_user(user_dir: Path):
     print(f"  -> walking={len(Xw_all)}  inertial={len(Xi_all)}  saved to processed/{uid}/")
 
 
-# ════════════════════════════════════════════════════════════════
-# ENTRY
-# ════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     if not DATA_DIR.is_dir():
         print(f"ERROR: data/ not found at {DATA_DIR}")

@@ -1,0 +1,20 @@
+\documentclass[../DoAn.tex]{subfiles}
+\begin{document}
+\begin{center}
+    \Large{\textbf{TÓM TẮT NỘI DUNG ĐỒ ÁN}}\\
+\end{center}
+\vspace{1cm}
+Bảo mật điện thoại thông minh chủ yếu dựa vào xác thực một lần khi mở khóa như PIN, vân tay hay khuôn mặt, nên thiết bị vẫn có thể bị truy cập trái phép sau khi đã mở khóa. Hướng xác thực liên tục dựa trên sinh trắc học hành vi (Behavioral Biometrics) được đề xuất để khắc phục hạn chế này; các hệ thống như IntelliAuth, B2auth, M2Auth và MultiLock khai thác cảm biến quán tính hoặc hành vi chạm màn hình, nhưng còn hạn chế về khả năng thích ứng với khác biệt phần cứng và chưa có cơ chế xác thực dự phòng thay cho mã PIN khi phát hiện người lạ.
+
+Đồ án lựa chọn hướng đa phương thức, kết hợp cảm biến quán tính (accelerometer, gyroscope, magnetometer) với hành vi tương tác màn hình (tap, scroll, keystroke), và khai thác ngữ cảnh hoạt động bằng cách thu dữ liệu có gán nhãn ba hoạt động rồi huấn luyện, đánh giá theo từng ngữ cảnh.
+
+Giải pháp đề xuất là một pipeline hoàn chỉnh từ thu thập dữ liệu đến triển khai. Nhánh chính dựa trên cảm biến quán tính dùng một bộ mã hóa học không gian embedding; mỗi chủ sở hữu được đăng ký bằng vài embedding đại diện (anchor) và xác thực theo độ tương đồng cosine, vận hành theo kịch bản nhận dạng tập mở. Điểm tin cậy được làm mịn bằng EWMA; khi giảm dưới ngưỡng, hệ thống kích hoạt cơ chế xác thực dự phòng bằng cử chỉ lắc điện thoại cá nhân. Hệ thống được hiện thực trên hai ứng dụng Android cùng pipeline huấn luyện trên Python/TensorFlow.
+
+Đóng góp chính là một hệ thống xác thực liên tục vận hành tập mở kèm cơ chế xác thực dự phòng, được đánh giá trên dataset thực tế gồm 26 người với 136.746 cửa sổ quán tính, 34.836 sự kiện chạm và 22.694 sự kiện gõ phím. Ba kiến trúc CNN 1D, CNN-LSTM và CNN-BiLSTM được so sánh, đồng thời đồ án khảo sát một cách có hệ thống các hàm quyết định chuyển embedding thành điểm tin cậy. Bộ mã hóa CNN 1D chỉ với cảm biến quán tính được chọn cho triển khai; với hàm quyết định chuẩn hóa điểm theo nhóm nền, cấu hình này đạt tỉ lệ lỗi cân bằng khoảng 0,3\% ở kịch bản tập đóng và khoảng 1,4\% ở kịch bản tập mở qua kiểm thử chéo leave-users-out, cải thiện đáng kể so với hàm quyết định cơ sở mà không cần huấn luyện lại mô hình. Việc bổ sung nhánh touch qua dung hợp tuyến tính được đánh giá đối chứng nhưng không cải thiện hiệu năng tập mở, nên bản triển khai cuối chỉ dùng nhánh quán tính.
+\begin{flushright}
+Sinh viên thực hiện\\
+\begin{tabular}{@{}c@{}}
+\textit{(Ký và ghi rõ họ tên)}
+\end{tabular}
+\end{flushright}
+\end{document}

@@ -118,8 +118,16 @@ class OwnerEnrollmentActivity : AppCompatActivity() {
 
                 status.text = "Đã thu xong ${anchors.size} mẫu IMU. Đang lưu..."
                 val rfInertial = withContext(Dispatchers.Default) { trainRfInertial(anchors) }
+                // ZNORM: tính (mean,std) cohort từ cùng impostor pool, rồi lưu kèm profile
+                val (cohMean, cohStd) = withContext(Dispatchers.Default) {
+                    val mode = ContextMode.loadOrDefault(this@OwnerEnrollmentActivity)
+                    val poolPath = ContextMode.assetPath(mode, "impostor_pool_inertial.npy")
+                    val pool = try { NpyReader.readFloat32_2D(this@OwnerEnrollmentActivity, poolPath) }
+                    catch (e: Exception) { emptyArray<FloatArray>() }
+                    InferenceEngine.fitCohort(anchors, pool)
+                }
                 withContext(Dispatchers.Default) {
-                    ownerProfile.save(anchors, rfInertial, null, 1f)
+                    ownerProfile.save(anchors, rfInertial, null, 1f, cohMean, cohStd)
                 }
                 toast("Enrollment xong! Tiếp theo: đăng ký mẫu lắc.")
                 goToFallbackEnroll()

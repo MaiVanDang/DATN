@@ -15,6 +15,12 @@ class OwnerProfile(context: Context) {
     private var cachedRfInertial: RandomForestClassifier? = null
     private var cachedRfTouch: RandomForestClassifier? = null
     private var cachedFusionW: Float = FusionEngine.DEFAULT_W
+    // ZNORM: tham số chuẩn hóa cohort (mặc định 0/1 = không chuẩn hóa, suy biến về cos_mean)
+    private var cachedCohortMean: Float = 0f
+    private var cachedCohortStd:  Float = 1f
+
+    fun getCohortMean(): Float { if (cachedAnchors == null) loadFromDisk(); return cachedCohortMean }
+    fun getCohortStd():  Float { if (cachedAnchors == null) loadFromDisk(); return cachedCohortStd }
 
     fun hasEnrollment(): Boolean = file.exists() && getAnchors().isNotEmpty()
 
@@ -47,6 +53,8 @@ class OwnerProfile(context: Context) {
         rfInertial: RandomForestClassifier,
         rfTouch: RandomForestClassifier?,
         fusionW: Float,
+        cohortMean: Float = 0f,
+        cohortStd: Float = 1f,
     ) {
         require(anchors.isNotEmpty()) { "Cannot save empty anchor list" }
         require(anchors.all { it.size == InferenceEngine.EMBED_DIM }) {
@@ -54,12 +62,15 @@ class OwnerProfile(context: Context) {
         }
 
         DataOutputStream(FileOutputStream(file)).use { dos ->
-            dos.writeInt(MAGIC_V2)
+            dos.writeInt(MAGIC_V3)
             dos.writeInt(anchors.size)
             dos.writeInt(InferenceEngine.EMBED_DIM)
             for (a in anchors) for (v in a) dos.writeFloat(v)
 
             dos.writeFloat(fusionW)
+            // ZNORM: ghi 2 tham số cohort ngay sau fusionW
+            dos.writeFloat(cohortMean)
+            dos.writeFloat(cohortStd)
 
             val rfIBytes = rfInertial.toByteArray()
             dos.writeByte(if (rfTouch != null) 1 else 0)
@@ -77,8 +88,11 @@ class OwnerProfile(context: Context) {
         cachedRfInertial = rfInertial
         cachedRfTouch    = rfTouch
         cachedFusionW    = fusionW
+        cachedCohortMean = cohortMean
+        cachedCohortStd  = cohortStd
 
-        Log.i(TAG, "Profile saved: ${anchors.size} anchors, fusion_w=$fusionW, touch=${rfTouch != null}")
+        Log.i(TAG, "Profile saved: ${anchors.size} anchors, fusion_w=$fusionW, " +
+                "cohort=($cohortMean,$cohortStd), touch=${rfTouch != null}")
     }
 
     fun saveAnchors(anchors: List<FloatArray>) {
@@ -93,6 +107,7 @@ class OwnerProfile(context: Context) {
         cachedRfInertial = null
         cachedRfTouch    = null
         cachedFusionW    = FusionEngine.DEFAULT_W
+        cachedCohortMean = 0f; cachedCohortStd = 1f
         Log.i(TAG, "Anchors-only profile saved: ${anchors.size} anchors")
     }
 
@@ -100,6 +115,7 @@ class OwnerProfile(context: Context) {
         if (file.exists()) file.delete()
         cachedAnchors = null; cachedRfInertial = null
         cachedRfTouch = null; cachedFusionW = FusionEngine.DEFAULT_W
+        cachedCohortMean = 0f; cachedCohortStd = 1f
         Log.i(TAG, "Owner profile cleared")
     }
 
@@ -111,6 +127,7 @@ class OwnerProfile(context: Context) {
                 when (magic) {
                     MAGIC_V1 -> loadV1(dis)
                     MAGIC_V2 -> loadV2(dis)
+                    MAGIC_V3 -> loadV3(dis)
                     else -> Log.e(TAG, "Unknown magic 0x${magic.toString(16)}")
                 }
             }
@@ -128,7 +145,32 @@ class OwnerProfile(context: Context) {
         cachedRfInertial = null
         cachedRfTouch    = null
         cachedFusionW    = FusionEngine.DEFAULT_W
+        cachedCohortMean = 0f; cachedCohortStd = 1f   // ZNORM: profile cũ → không chuẩn hóa
         Log.i(TAG, "Loaded V1 profile: $n anchors")
+    }
+
+    private fun loadV3(dis: DataInputStream) {
+        val n = dis.readInt(); val dim = dis.readInt()
+        val list = ArrayList<FloatArray>(n)
+        repeat(n) { val v = FloatArray(dim) { dis.readFloat() }; list.add(v) }
+        cachedAnchors = list
+
+        cachedFusionW    = dis.readFloat()
+        cachedCohortMean = dis.readFloat()   // ZNORM
+        cachedCohortStd  = dis.readFloat()   // ZNORM
+        val hasTouch = dis.readByte().toInt() == 1
+
+        val rfISize = dis.readInt()
+        val rfIBytes = ByteArray(rfISize).also { dis.readFully(it) }
+        cachedRfInertial = RandomForestClassifier().apply { readFrom(rfIBytes.inputStream()) }
+
+        if (hasTouch) {
+            val rfTSize = dis.readInt()
+            val rfTBytes = ByteArray(rfTSize).also { dis.readFully(it) }
+            cachedRfTouch = RandomForestClassifier().apply { readFrom(rfTBytes.inputStream()) }
+        }
+        Log.i(TAG, "Loaded V3 profile: $n anchors, fusion_w=$cachedFusionW, " +
+                "cohort=($cachedCohortMean,$cachedCohortStd), touch=$hasTouch")
     }
 
     private fun loadV2(dis: DataInputStream) {
@@ -138,6 +180,7 @@ class OwnerProfile(context: Context) {
         cachedAnchors = list
 
         cachedFusionW = dis.readFloat()
+        cachedCohortMean = 0f; cachedCohortStd = 1f   // ZNORM: V2 chưa có cohort
         val hasTouch = dis.readByte().toInt() == 1
 
         val rfISize = dis.readInt()
@@ -157,6 +200,7 @@ class OwnerProfile(context: Context) {
         private const val FILE_NAME = "owner_anchors.bin"
         private const val MAGIC_V1  = 0xACAF0001.toInt()
         private const val MAGIC_V2  = 0xACAF0002.toInt()
+        private const val MAGIC_V3  = 0xACAF0003.toInt()
     }
 }
 

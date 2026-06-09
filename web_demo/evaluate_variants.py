@@ -15,8 +15,8 @@ from sklearn.ensemble import RandomForestClassifier
 
 sys.path.insert(0, str(Path(__file__).parent))
 import torch
-from models import load_encoder
-from verifier import (
+from web_demo.models import load_encoder
+from web_demo.verifier import (
     load_artifacts, load_user_inertial,
     extract_embeddings, list_available_users,
 )

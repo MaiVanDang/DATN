@@ -1,10 +1,5 @@
 {
   "context_mode": "all",
-  "input_shape": [
-    1,
-    9,
-    200
-  ],
   "embed_dim": 128,
   "users_trained": [
     "user1",
@@ -27,9 +22,7 @@
     "user8",
     "user9"
   ],
-  "touch_feat_dim": 48,
-  "pool_size_inertial": 100,
-  "pool_size_touch": 76,
+  "touch_feat_dim": 33,
   "framework": "pytorch",
-  "note": "\u0110\u1ec3 deploy Android, convert backbone.pt \u2192 ONNX \u2192 TFLite"
+  "note": "Deploy: backbone.pt \u2192 ONNX \u2192 TFLite"
 }

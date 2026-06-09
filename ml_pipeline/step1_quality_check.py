@@ -8,10 +8,9 @@ from step2_preprocess import (
     HZ, WINDOW_SIZE,
     split_segments,
     process_tap, process_scroll, process_keystroke,
-    aggregate_touch, TOUCH_COLS,
+    aggregate_touch,
 )
 
-# ── CONFIG ──────────────────────────────────────────────────────
 MAX_GAP_SEC = 5 / HZ
 
 INERTIAL_TARGET_MIN = {
@@ -32,7 +31,6 @@ MAD_MIN              = 1e-6
 TOP_K_COLS           = 5
 
 
-# ── FORMAT HELPERS ──────────────────────────────────────────────
 def fmt_time(sec: float) -> str:
     """Định dạng giây thành 'MpSSs', vd 19.5 → '0p19s'."""
     m = int(sec // 60)
@@ -52,7 +50,6 @@ def check_status(value, target, unit: str = "") -> str:
         return f"✗ THIẾU  (cần thêm {target - value})"
 
 
-# ── INERTIAL DURATION ───────────────────────────────────────────
 def get_duration(df: pd.DataFrame, filename: str = "") -> float:
     """Thời gian thu thực tế (giây) sau khi loại gap và bỏ segment quá ngắn."""
     segments = split_segments(df)
@@ -83,7 +80,6 @@ def collect_inertial(session_dir: Path) -> dict[str, float]:
     return result
 
 
-# ── TOUCH / KEYSTROKE ───────────────────────────────────────────
 def collect_touch_counts(
     session_dir: Path, session_id: str
 ) -> tuple[dict[str, int], pd.DataFrame | None]:
@@ -103,7 +99,6 @@ def collect_touch_counts(
     return counts, feat_row
 
 
-# ── SESSION-LEVEL CHECK ─────────────────────────────────────────
 def check_session(session_dir: Path) -> tuple[dict, dict, pd.DataFrame | None]:
     """In kết quả 1 session, trả (inertial_secs, touch_counts, touch_feature_row)."""
     print(f"\n  ┌─ {session_dir.name} ─────────────────")
@@ -123,7 +118,6 @@ def check_session(session_dir: Path) -> tuple[dict, dict, pd.DataFrame | None]:
     return inertial, counts, feat_row
 
 
-# ── OUTLIER DETECTION ───────────────────────────────────────────
 def detect_outlier_sessions(
     feat_table: pd.DataFrame,
 ) -> tuple[dict[str, dict], dict[str, float]]:
@@ -170,7 +164,6 @@ def detect_outlier_sessions(
     return outliers, all_scores
 
 
-# ── USER-LEVEL CHECK ────────────────────────────────────────────
 def check_user(user_dir: Path) -> bool:
     print("\n" + "=" * 54)
     print(f"  USER: {user_dir.name}")
@@ -197,7 +190,6 @@ def check_user(user_dir: Path) -> bool:
         if feat_row is not None and len(feat_row):
             feat_rows.append(feat_row)
 
-    # ── Tổng kết thời lượng + count ─────────────────────────────
     print(f"\n  {'━' * 52}")
     print(f"  TỔNG KẾT  ({len(sessions)} session)")
     print(f"  {'━' * 52}")
@@ -220,7 +212,6 @@ def check_user(user_dir: Path) -> bool:
             all_ok = False
         print(f"    {metric:<10}: {count:>5} / {tgt:<5}  {st}")
 
-    # ── Outlier session ──────────────────────────────────────────
     print(f"\n  [Outlier check] ({len(feat_rows)} session có touch features)")
     if len(feat_rows) < MIN_SESSIONS_FOR_Z:
         print(f"    ⊘  Chỉ có {len(feat_rows)} session — cần ≥ {MIN_SESSIONS_FOR_Z} "
@@ -258,7 +249,6 @@ def check_user(user_dir: Path) -> bool:
     return all_ok
 
 
-# ── ENTRY ───────────────────────────────────────────────────────
 if __name__ == "__main__":
     data_dir  = Path("./data")
     user_dirs = sorted([d for d in data_dir.iterdir() if d.is_dir()])

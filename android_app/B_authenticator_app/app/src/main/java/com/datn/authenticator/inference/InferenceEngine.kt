@@ -23,6 +23,9 @@ class InferenceEngine private constructor(
     val isMockMode: Boolean,
     val backend: Backend,
 ) : AutoCloseable {
+    // ZNORM: tham số chuẩn hóa cohort, đọc từ OwnerProfile (mặc định 0/1 = không chuẩn hóa)
+    private val cohortMean: Float get() = ownerProfile.getCohortMean()
+    private val cohortStd:  Float get() = ownerProfile.getCohortStd()
     enum class Backend { CPU_4_THREAD, CPU_1_THREAD, MOCK }
 
     private val inputBuffer: ByteBuffer = ByteBuffer
@@ -70,8 +73,11 @@ class InferenceEngine private constructor(
             val rfScore = if (rfInertial != null && rfInertial.isTrained)
                 rfInertial.predictProba(embed) else -1f
 
-            score = sigmoid(SCORE_SCALE * (meanSim - SCORE_BIAS))
-            Log.d(TAG, "predict: cosine=${"%.3f".format(meanSim)} → score=${"%.3f".format(score)}" +
+            // ZNORM: chuẩn hóa điểm cosine theo phân bố cohort trước khi qua sigmoid.
+            // Nếu chưa có cohort (std<=0, profile cũ) thì zSim = meanSim → suy biến về cos_mean.
+            val zSim = if (cohortStd > 1e-6f) (meanSim - cohortMean) / cohortStd else meanSim
+            score = sigmoid(SCORE_SCALE * (zSim - SCORE_BIAS))
+            Log.d(TAG, "predict: cosine=${"%.3f".format(meanSim)} z=${"%.3f".format(zSim)} → score=${"%.3f".format(score)}" +
                     "  [core=${coreAnchors.size} adapt=${adaptive.size}]" +
                     (if (rfScore >= 0) "  [RF_ref=${"%.3f".format(rfScore)}]" else ""))
         } else {
@@ -154,10 +160,40 @@ class InferenceEngine private constructor(
         const val TIMESTEPS = SensorWindow.TIMESTEPS
         private const val DEFAULT_MODEL_ASSET = "backbone.tflite"
 
-        private const val SCORE_SCALE = 8f
-        private const val SCORE_BIAS  = 0.30f
+        // Sau ZNORM, điểm zSim là z-score (≈ phân bố quanh 0, đơn vị độ lệch chuẩn của cohort).
+        // SCORE_BIAS đặt theo z-score tại điểm EER (xác định offline); SCORE_SCALE điều chỉnh độ dốc.
+        // Lưu ý: nếu profile chưa có cohort, zSim = meanSim (thang cosine cũ) → vẫn hoạt động hợp lý.
+        private const val SCORE_SCALE = 3.0f
+        private const val SCORE_BIAS  = 2.0f
 
         fun sigmoid(x: Float): Float = 1f / (1f + exp(-x))
+
+        /**
+         * ZNORM: tính (mean, std) của điểm cos_mean mà tập anchor tạo ra trên cohort impostor.
+         * Gọi MỘT LẦN lúc enroll, lưu vào OwnerProfile. Trả về (0f, 1f) nếu pool rỗng.
+         */
+        fun fitCohort(anchors: List<FloatArray>, impostorPool: Array<FloatArray>): Pair<Float, Float> {
+            if (anchors.isEmpty() || impostorPool.isEmpty()) return 0f to 1f
+            val scores = FloatArray(impostorPool.size)
+            for (i in impostorPool.indices) {
+                var total = 0f
+                for (a in anchors) total += staticCosine(impostorPool[i], a)
+                scores[i] = total / anchors.size
+            }
+            var mean = 0f
+            for (s in scores) mean += s
+            mean /= scores.size
+            var varSum = 0f
+            for (s in scores) varSum += (s - mean) * (s - mean)
+            val std = sqrt((varSum / scores.size).toDouble()).toFloat()
+            return mean to std
+        }
+
+        private fun staticCosine(a: FloatArray, b: FloatArray): Float {
+            var dot = 0f; var na = 0f; var nb = 0f
+            for (i in a.indices) { dot += a[i]*b[i]; na += a[i]*a[i]; nb += b[i]*b[i] }
+            return (dot / (sqrt(na.toDouble()) * sqrt(nb.toDouble()) + 1e-9)).toFloat()
+        }
 
         fun load(
             context: Context,
