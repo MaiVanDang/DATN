@@ -22,6 +22,7 @@ import com.datn.authenticator.fallback.FallbackActivity
 import com.datn.authenticator.inference.InferenceEngine
 import com.datn.authenticator.inference.ScoreAggregator
 import com.datn.authenticator.inference.SensorWindowCollector
+import com.datn.authenticator.inference.ThresholdCalibrator
 import com.datn.authenticator.model.AuthState
 import com.datn.authenticator.model.SensorWindow
 import com.datn.authenticator.model.ExportManifest
@@ -72,7 +73,10 @@ class AuthenticationService : Service() {
     @Volatile private var lastCaptureElapsedMs: Long = 0L
     @Volatile private var pendingCaptureReason: String? = null
 
-    private var warningTimerJob: Job? = null
+    // Timer "nguy hiểm" gộp cho cả WARNING và UNKNOWN: chỉ fallback khi trạng thái
+    // nguy hiểm DUY TRÌ đủ lâu (đệm), không phản ứng tức thì với một nhịp tụt điểm.
+    private var dangerTimerJob: Job? = null
+    @Volatile private var dangerDeadlineMs: Long = 0L
 
     @Volatile private var fallbackGraceUntilMs: Long = 0L
 
@@ -107,6 +111,23 @@ class AuthenticationService : Service() {
                     "window=${manifest.scoreAggregatorWindow}")
         } else {
             Log.w(TAG, "Không đọc được manifest — dùng ngưỡng mặc định")
+        }
+
+        // PER-OWNER THRESHOLD: nếu owner đã hiệu chuẩn ngưỡng riêng lúc enroll,
+        // ưu tiên dùng nó thay cho ngưỡng manifest (vốn chung cho mọi người).
+        // warning đặt thấp hơn trusted một biên để có vùng đệm (bớt lật trạng thái).
+        val thrOwner = inferenceEngine?.ownerProfile()?.getThrInertial()
+            ?: ThresholdCalibrator.UNCALIBRATED
+        if (ThresholdCalibrator.isCalibrated(thrOwner)) {
+            val warning = (thrOwner - PER_OWNER_WARNING_MARGIN).coerceIn(0.01f, thrOwner)
+            aggregator = ScoreAggregator(
+                windowSize = aggregator.windowSize,
+                alpha = aggregator.alpha,
+                trustedThreshold = thrOwner,
+                warningThreshold = warning,
+            )
+            Log.i(TAG, "Aggregator dùng ngưỡng PER-OWNER: trusted=${"%.3f".format(thrOwner)} " +
+                    "warning=${"%.3f".format(warning)}")
         }
         Log.i(TAG, "InferenceEngine ready: backend=${inferenceEngine?.backend}, mock=${inferenceEngine?.isMockMode}")
 
@@ -163,7 +184,7 @@ class AuthenticationService : Service() {
         Log.i(TAG, "AuthenticationService onDestroy")
         try { unregisterReceiver(screenOnReceiver) } catch (_: Exception) {}
         try { significantMotionSensor?.let { sensorManager.cancelTriggerSensor(significantMotionListener, it) } } catch (_: Exception) {}
-        warningTimerJob?.cancel()
+        dangerTimerJob?.cancel()
         captureLoopJob?.cancel()
         scope.cancel()
         try { if (::collector.isInitialized) collector.shutdown() } catch (_: Exception) {}
@@ -219,7 +240,6 @@ class AuthenticationService : Service() {
                     "lat=${"%.1f".format(result.totalLatencyMs)}ms")
 
             _score.value = newScore
-            val previousState = _state.value
             _state.value = newState
             updateNotification(newState, newScore)
 
@@ -232,30 +252,31 @@ class AuthenticationService : Service() {
 
             when (newState) {
                 AuthState.TRUSTED -> {
-                    warningTimerJob?.cancel()
-                    warningTimerJob = null
+                    // Hồi phục về tin cậy → hủy đếm ngược.
+                    dangerTimerJob?.cancel()
+                    dangerTimerJob = null
                 }
-                AuthState.WARNING -> {
-                    if (warningTimerJob == null || !warningTimerJob!!.isActive) {
-                        Log.i(TAG, "WARNING — bắt đầu đếm ngược ${WARNING_TIMEOUT_MS / 1000}s")
-                        warningTimerJob = scope.launch {
-                            delay(WARNING_TIMEOUT_MS)
+                AuthState.WARNING, AuthState.UNKNOWN -> {
+                    // ĐỆM: UNKNOWN dùng khoảng đệm ngắn hơn WARNING. Chỉ khởi động
+                    // timer khi chưa có, hoặc RÚT NGẮN khi tụt từ WARNING xuống
+                    // UNKNOWN (deadline mới sớm hơn) — không bao giờ kéo dài thêm.
+                    val graceMs = if (newState == AuthState.UNKNOWN)
+                        UNKNOWN_GRACE_MS else WARNING_TIMEOUT_MS
+                    val deadline = SystemClock.elapsedRealtime() + graceMs
+                    val active = dangerTimerJob?.isActive == true
+                    if (!active || deadline < dangerDeadlineMs) {
+                        dangerTimerJob?.cancel()
+                        dangerDeadlineMs = deadline
+                        Log.i(TAG, "$newState — đệm ${graceMs / 1000}s trước khi fallback")
+                        dangerTimerJob = scope.launch {
+                            delay(graceMs)
                             if (_state.value != AuthState.TRUSTED) {
-                                Log.i(TAG, "WARNING timeout — launching fallback")
+                                Log.i(TAG, "Đệm hết hạn ở trạng thái ${_state.value} — fallback")
                                 inferenceEngine?.adaptiveBuffer()?.onFallbackTriggered()
                                 launchFallbackActivity()
                             }
-                            warningTimerJob = null
+                            dangerTimerJob = null
                         }
-                    }
-                }
-                AuthState.UNKNOWN -> {
-                    warningTimerJob?.cancel()
-                    warningTimerJob = null
-                    if (previousState != AuthState.UNKNOWN) {
-                        Log.i(TAG, "UNKNOWN — launching fallback immediately")
-                        inferenceEngine?.adaptiveBuffer()?.onFallbackTriggered()
-                        launchFallbackActivity()
                     }
                 }
             }
@@ -319,7 +340,7 @@ class AuthenticationService : Service() {
     fun onFallbackVerified() {
         fallbackBlocked = false
         fallbackGraceUntilMs = SystemClock.elapsedRealtime() + FALLBACK_GRACE_MS
-        warningTimerJob?.cancel(); warningTimerJob = null
+        dangerTimerJob?.cancel(); dangerTimerJob = null
         aggregator.reset()
 
         val highScore = aggregator.push(1.0f)
@@ -362,10 +383,14 @@ class AuthenticationService : Service() {
     companion object {
         private const val TAG = "${AuthenticatorApp.TAG}/Service"
 
+        private const val PER_OWNER_WARNING_MARGIN = 0.10f
         private const val COOLDOWN_MS = 5_000L
         private const val POLL_INTERVAL_MS = 250L
         private const val PERIODIC_CAPTURE_INTERVAL_MS = 4_000L
         private const val WARNING_TIMEOUT_MS = 15_000L
+        // Đệm cho UNKNOWN: ngắn hơn WARNING (UNKNOWN đáng ngờ hơn) nhưng vẫn đủ
+        // hấp thụ một nhịp tụt điểm thoáng qua, tránh fallback tức thì.
+        private const val UNKNOWN_GRACE_MS = 6_000L
         private const val FALLBACK_GRACE_MS = 30_000L
 
         private const val MOTION_VAR_THRESHOLD = 0.15

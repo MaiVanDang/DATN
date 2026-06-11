@@ -195,6 +195,26 @@ class InferenceEngine private constructor(
             return (dot / (sqrt(na.toDouble()) * sqrt(nb.toDouble()) + 1e-9)).toFloat()
         }
 
+        /**
+         * Chấm điểm cos_znorm cho MỘT embedding so với tập anchor — GIỐNG HỆT
+         * đường quyết định trong predict(): mean cosine → z-norm cohort → sigmoid.
+         * Dùng lúc hiệu chuẩn ngưỡng per-owner (ThresholdCalibrator) để bảo đảm
+         * thang điểm khớp tuyệt đối với lúc vận hành.
+         */
+        fun scoreAgainstAnchors(
+            embed: FloatArray,
+            anchors: List<FloatArray>,
+            cohortMean: Float,
+            cohortStd: Float,
+        ): Float {
+            if (anchors.isEmpty()) return 0f
+            var total = 0f
+            for (a in anchors) total += staticCosine(embed, a)
+            val meanSim = total / anchors.size
+            val z = if (cohortStd > 1e-6f) (meanSim - cohortMean) / cohortStd else meanSim
+            return sigmoid(SCORE_SCALE * (z - SCORE_BIAS))
+        }
+
         fun load(
             context: Context,
             numThreads: Int = 4,

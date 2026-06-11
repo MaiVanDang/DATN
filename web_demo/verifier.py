@@ -156,6 +156,62 @@ SCORE_BIAS  = 2.0
 # ─────────────────────────────────────────────────────────────────
 FIXED_THRESHOLD = 0.23
 
+# ─────────────────────────────────────────────────────────────────
+# NGƯỠNG THEO TỪNG OWNER (per-owner calibration).
+# Thay vì một hằng số chung, ngưỡng được hiệu chuẩn từ PHÂN BỐ điểm
+# genuine của chính owner trên phiên val (tách rời anchor → không rò rỉ):
+#       thr = mean_genuine − K_STD · std_genuine,  kẹp trong [FLOOR, CEIL].
+# Lý do: mỗi owner có độ biến thiên hành vi khác nhau; owner "linh hoạt"
+# cần ngưỡng thấp hơn để không bị từ chối nhầm, owner "ổn định" có thể
+# đặt ngưỡng cao hơn. Người lạ sau z-norm cohort có điểm ≈0 nên việc hạ
+# ngưỡng cho owner gần như không ảnh hưởng khả năng chặn impostor.
+# FALLBACK về FIXED_THRESHOLD khi không có phiên val để ước lượng.
+# ─────────────────────────────────────────────────────────────────
+THR_K_STD      = 1.5   # số độ lệch chuẩn đặt ngưỡng dưới trung bình genuine (khi thiếu impostor)
+THR_FLOOR      = 0.02  # sàn an toàn — không cho ngưỡng tụt quá thấp
+THR_CEIL       = 0.80  # trần — không cho ngưỡng cao quá gây từ chối owner
+THR_AGG_WINDOW = 5     # gộp ~5 cửa sổ trước khi hiệu chuẩn (khớp EWMA triển khai)
+
+
+def _aggregate_scores(scores, w, seed=0):
+    """Gộp điểm theo nhóm w cửa sổ rồi lấy trung bình.
+
+    Lý do: ở mức CỬA SỔ, điểm genuine và impostor chồng lấn nặng; khả năng
+    phân biệt chỉ xuất hiện sau khi gộp (giống EWMA lúc vận hành). Vì vậy
+    ngưỡng phải được hiệu chuẩn ở ĐÚNG mức gộp mà quyết định sử dụng.
+    """
+    s = np.asarray(scores, dtype=np.float64).ravel()
+    if s.size < w:
+        return np.array([s.mean()]) if s.size else s
+    s = s.copy()
+    np.random.default_rng(seed).shuffle(s)   # cohort pool không theo thời gian
+    n = s.size // w
+    return s[:n * w].reshape(n, w).mean(axis=1)
+
+
+def calibrate_owner_threshold(genuine_scores, impostor_scores=None,
+                              fallback=FIXED_THRESHOLD):
+    """Ngưỡng per-owner cân bằng FAR≈FRR ở mức điểm đã gộp.
+
+    genuine_scores  : điểm s_inertial ∈[0,1] trên cửa sổ genuine của owner
+                      (phiên val, tách rời anchor).
+    impostor_scores : điểm s_inertial trên cohort impostor (tái dùng embedding).
+                      Cả hai được gộp theo THR_AGG_WINDOW trước khi tính ngưỡng,
+                      để khớp mức gộp lúc quyết định; nếu thiếu impostor thì lùi
+                      K_STD độ lệch chuẩn dưới trung bình genuine.
+    """
+    g = _aggregate_scores(genuine_scores, THR_AGG_WINDOW, seed=1)
+    if g.size < 2:
+        return float(fallback)
+    if impostor_scores is not None and np.size(impostor_scores) >= THR_AGG_WINDOW:
+        imp = _aggregate_scores(impostor_scores, THR_AGG_WINDOW, seed=2)
+        y = np.concatenate([np.ones(g.size), np.zeros(imp.size)])
+        s = np.concatenate([g, imp])
+        thr = _eer_threshold(y, s)          # cân bằng FAR≈FRR cho owner này
+    else:
+        thr = g.mean() - THR_K_STD * g.std()
+    return float(np.clip(thr, THR_FLOOR, THR_CEIL))
+
 
 def _l2(M): return M / (np.linalg.norm(M, axis=-1, keepdims=True) + 1e-9)
 def mean_cosine(e, a): return (_l2(e) @ _l2(a).T).mean(1)
@@ -292,10 +348,24 @@ def enroll(owner_id, n_enroll_sessions, data_dir, encoder, artifacts,
             print(f"[enroll] Bỏ qua nhánh touch (lỗi/lệch dữ liệu): {e}")
             rf_touch = None
 
-    # ── Ngưỡng + fusion_w trên val ──
-    thr_inertial, fusion_w, thr_fusion = _tune(
+    # ── fusion_w trên val (giữ nguyên — chỉ lấy trọng số, bỏ ngưỡng cũ) ──
+    _, fusion_w, _ = _tune(
         owner_id, val_key, data_dir, impostor_dir, encoder, anchors,
         cohort_mean, cohort_std, rf_touch, artifacts, data_mode)
+
+    # ── Ngưỡng PER-OWNER: cân bằng FAR≈FRR riêng cho owner ──
+    # Genuine: phiên val (tách rời anchor), chấm ở MỨC CỬA SỔ — sát kịch bản
+    # chấm điểm liên tục trên thiết bị. Impostor: cohort pool đã tính sẵn ở
+    # trên (tái dùng embedding, không extract thêm).
+    thr_inertial = FIXED_THRESHOLD
+    if val_key is not None and val_key in sessions and len(sessions[val_key]):
+        g_scores = score_inertial(
+            extract_embeddings(encoder, sessions[val_key]),
+            anchors, cohort_mean, cohort_std)
+        imp_scores = (score_inertial(cohort, anchors, cohort_mean, cohort_std)
+                      if len(cohort) else None)
+        thr_inertial = calibrate_owner_threshold(g_scores, imp_scores)
+    thr_fusion = thr_inertial   # dùng chung ngưỡng per-owner cho nhánh fusion
 
     return Enrollment(owner_id, enroll_keys, anchors, cohort_mean, cohort_std,
                       thr_inertial, rf_touch, artifacts, fusion_w, thr_fusion, data_mode)

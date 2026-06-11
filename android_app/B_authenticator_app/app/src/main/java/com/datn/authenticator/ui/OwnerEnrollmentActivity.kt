@@ -16,6 +16,7 @@ import com.datn.authenticator.inference.NpyReader
 import com.datn.authenticator.inference.OwnerProfile
 import com.datn.authenticator.inference.RandomForestClassifier
 import com.datn.authenticator.inference.SensorWindowCollector
+import com.datn.authenticator.inference.ThresholdCalibrator
 import com.datn.authenticator.service.AuthenticationService
 import com.datn.authenticator.util.ContextMode
 import kotlinx.coroutines.Dispatchers
@@ -118,16 +119,20 @@ class OwnerEnrollmentActivity : AppCompatActivity() {
 
                 status.text = "Đã thu xong ${anchors.size} mẫu IMU. Đang lưu..."
                 val rfInertial = withContext(Dispatchers.Default) { trainRfInertial(anchors) }
-                // ZNORM: tính (mean,std) cohort từ cùng impostor pool, rồi lưu kèm profile
-                val (cohMean, cohStd) = withContext(Dispatchers.Default) {
+                // ZNORM + PER-OWNER THRESHOLD: tái dùng cùng impostor pool để tính
+                // (mean,std) cohort và ngưỡng quyết định riêng cho owner.
+                val (cohMean, cohStd, thrInertial) = withContext(Dispatchers.Default) {
                     val mode = ContextMode.loadOrDefault(this@OwnerEnrollmentActivity)
                     val poolPath = ContextMode.assetPath(mode, "impostor_pool_inertial.npy")
                     val pool = try { NpyReader.readFloat32_2D(this@OwnerEnrollmentActivity, poolPath) }
                     catch (e: Exception) { emptyArray<FloatArray>() }
-                    InferenceEngine.fitCohort(anchors, pool)
+                    val (m, s) = InferenceEngine.fitCohort(anchors, pool)
+                    val thr = ThresholdCalibrator.calibrate(
+                        anchors, pool, m, s, fallback = ThresholdCalibrator.UNCALIBRATED)
+                    Triple(m, s, thr)
                 }
                 withContext(Dispatchers.Default) {
-                    ownerProfile.save(anchors, rfInertial, null, 1f, cohMean, cohStd)
+                    ownerProfile.save(anchors, rfInertial, null, 1f, cohMean, cohStd, thrInertial)
                 }
                 toast("Enrollment xong! Tiếp theo: đăng ký mẫu lắc.")
                 goToFallbackEnroll()
