@@ -17,7 +17,7 @@ Sinh trắc học hành vi (\textit{Behavioral Biometrics}) nổi lên như mộ
 
 Trong những năm gần đây, nhiều hệ thống xác thực hành vi trên thiết bị di động đã được đề xuất và nghiên cứu. IntelliAuth \cite{intelliauth} khai thác dữ liệu cảm biến quán tính kết hợp nhận diện hoạt động để cải thiện độ chính xác trong các ngữ cảnh sử dụng khác nhau. B2auth \cite{b2auth} tập trung vào hành vi touch và được đánh giá trong môi trường triển khai thực tế. M2Auth \cite{m2auth} đề xuất kiến trúc fusion đa phương thức kết hợp nhiều nguồn tín hiệu. MultiLock \cite{multilock} khai thác nhiều lớp xác thực đồng thời nhằm tăng cường độ bền vững của hệ thống.
 
-Tuy nhiên, phần lớn các nghiên cứu hiện có vẫn còn những khoảng trống quan trọng. Nhiều hệ thống chỉ khai thác một nguồn dữ liệu duy nhất, khiến hiệu quả suy giảm đáng kể trong các tình huống thiết bị đứng yên hoặc người dùng không tương tác trực tiếp với màn hình. Quan trọng hơn, gần như tất cả các hệ thống đều thiếu khả năng phát hiện người dùng lạ (\textit{open-set recognition}) - tức là chủ động từ chối và cảnh báo khi người dùng hiện tại không phải chủ sở hữu thiết bị - đây là điều kiện bắt buộc để một hệ thống có giá trị triển khai thực tế. Ngoài ra, ngay cả khi phát hiện bất thường, các hệ thống hiện tại thường chỉ phản ứng bằng cách khóa màn hình đơn giản, chưa có cơ chế xác thực lại chủ động để khôi phục 
+Tuy nhiên, phần lớn các nghiên cứu hiện có vẫn còn những khoảng trống. Nhiều hệ thống chỉ khai thác một nguồn dữ liệu duy nhất, khiến hiệu quả suy giảm đáng kể trong các tình huống thiết bị đứng yên hoặc người dùng không tương tác trực tiếp với màn hình. Quan trọng hơn, gần như tất cả các hệ thống đều thiếu khả năng phát hiện người dùng lạ (\textit{open-set recognition}) - tức là chủ động từ chối và cảnh báo khi người dùng hiện tại không phải chủ sở hữu thiết bị - đây là điều kiện bắt buộc để một hệ thống có giá trị triển khai thực tế. Ngoài ra, ngay cả khi phát hiện bất thường, các hệ thống hiện tại thường chỉ phản ứng bằng cách khóa màn hình đơn giản, chưa có cơ chế xác thực lại chủ động để khôi phục 
 phiên sử dụng một cách an toàn.
 
 \section{Mục tiêu và định hướng giải pháp}
@@ -44,7 +44,7 @@ Thứ hai, xây dựng pipeline huấn luyện và so sánh có hệ thống ba 
 
 Thứ ba, triển khai toàn bộ hệ thống suy luận trực tiếp trên thiết bị Android thông qua TensorFlow Lite mà không cần kết nối máy chủ, đảm bảo quyền riêng tư người dùng và khả năng hoạt động ngoại tuyến hoàn toàn.
 
-Thứ tư, đề xuất cơ chế xác thực dự phòng bằng cử chỉ lắc điện thoại cá nhân khi phát hiện người dùng lạ - đóng góp chưa xuất hiện trong các công trình được khảo sát - nhằm đóng kín vòng lặp xác thực từ giai đoạn phát hiện bất thường đến khôi phục phiên sử dụng an toàn.
+Thứ tư, hoàn tất vòng xác thực bằng một cơ chế dự phòng đơn giản dựa trên cử chỉ lắc điện thoại khi phát hiện người dùng lạ: thay vì quay về mật khẩu hay PIN truyền thống, hệ thống tự khôi phục phiên ngay trong cùng phương thức chuyển động, qua đó khép kín chu trình từ phát hiện bất thường đến khôi phục phiên sử dụng.
 
 \section{Bố cục đồ án}
 \label{sec:bocuc}
