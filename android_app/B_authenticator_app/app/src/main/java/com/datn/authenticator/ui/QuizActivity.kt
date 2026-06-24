@@ -219,7 +219,7 @@ class QuizActivity : AppCompatActivity() {
                 text = "Xác thực hành vi sinh trắc học (Behavioural Biometrics) là gì?",
                 options = listOf("Quét vân tay khi mở máy", "Nhận dạng qua khuôn mặt", "Phân tích cách người dùng tương tác để nhận dạng liên tục", "Kiểm tra mật khẩu định kỳ"),
                 correctIdx = 2,
-                explanation = "Xác thực hành vi phân tích các đặc trưng như tốc độ cuộn, nhịp gõ phím, chuyển động IMU để xác thực liên tục."
+                explanation = "Xác thực hành vi phân tích các đặc trưng như tốc độ cuộn, nhịp chạm, chuyển động IMU để xác thực liên tục."
             ),
         )
     }

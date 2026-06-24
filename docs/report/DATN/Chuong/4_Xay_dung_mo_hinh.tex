@@ -52,7 +52,7 @@ Từ tương quan đó, một mô hình có dung lượng quá lớn so với l�
 
 \subsection{Trích xuất đặc trưng động học}
 
-Khác với dữ liệu quán tính được đưa trực tiếp vào mạng học sâu, dữ liệu tương tác màn hình được chuyển thành một vector đặc trưng động học cố định cho mỗi phiên trước khi phân loại. Vector đặc trưng có 48 chiều, tổng hợp từ ba nhóm thao tác. Nhóm thao tác chạm đóng góp 16 chiều, gồm số lần chạm cùng các thống kê về thời gian giữ, độ dịch chuyển và khoảng thời gian giữa các lần chạm. Nhóm thao tác cuộn đóng góp 23 chiều, gồm số lần cuộn cùng các thống kê về thời lượng, độ dài và độ thẳng quỹ đạo, vận tốc trung bình và cực đại, hướng cuộn và tỉ lệ các hướng. Nhóm gõ phím đóng góp 9 chiều, gồm số phím cùng các thống kê về khoảng thời gian giữa các phím, tỉ lệ xóa và tốc độ gõ.
+Khác với dữ liệu quán tính được đưa trực tiếp vào mạng học sâu, dữ liệu tương tác màn hình được chuyển thành các vector đặc trưng động học mô tả hành vi chạm và cuộn trước khi phân loại. Nhóm thao tác chạm gồm số lần chạm cùng các thống kê về thời gian giữ, độ dịch chuyển và khoảng thời gian giữa các lần chạm. Nhóm thao tác cuộn gồm số lần cuộn cùng các thống kê về thời lượng, độ dài và độ thẳng quỹ đạo, vận tốc trung bình và cực đại, hướng cuộn và tỉ lệ các hướng.
 
 Với mỗi nhóm, các đặc trưng thống kê được tính dưới dạng trung bình, độ lệch chuẩn và các phân vị nhằm mô tả cả xu hướng trung tâm lẫn mức độ biến thiên của hành vi. Như đã nêu ở Chương 2, áp lực và diện tích tiếp xúc không được đưa vào tập đặc trưng vì trên phần lớn thiết bị thu thập các giá trị này gần như không đổi nên ít mang thông tin phân biệt.
 

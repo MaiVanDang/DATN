@@ -4,7 +4,8 @@ verifier.py — Lõi xác thực, phiên bản ĐA PHƯƠNG THỨC HIỂN THỊ.
 Hiển thị đầy đủ:
   • Điểm quán tính : cos_znorm (mean cosine tới anchor → z-norm cohort → sigmoid)
                      — ĐÂY là đường quyết định khớp bản triển khai on-device.
-  • Điểm touch     : Random Forest owner-vs-pool trên vector 48-D (mức phiên).
+  • Điểm touch     : Random Forest owner-vs-pool trên đặc trưng 33-D mức
+                     sub-window (tap+scroll) — CÙNG sơ đồ với pipeline đánh giá.
   • Điểm fusion    : w·inertial + (1-w)·touch  (w tune tự động trên val, chỉnh được).
 
 verify_session trả về CẢ HAI kết luận:
@@ -23,7 +24,7 @@ from pathlib import Path
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score, roc_curve
 
-from touch_features import build_session_features, FEATURE_COLS, FEAT_DIM as TOUCH_DIM
+from touch_subwindow import touch_subwindows, all_sessions, TOUCH_SUBWIN_DIM as TOUCH_DIM
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -257,22 +258,14 @@ def _build_inertial_pool(owner_id, impostor_dir, encoder, artifacts, mode, seed=
 
 
 def _build_touch_pool(owner_id, data_dir, artifacts):
+    """Pool người lạ = sub-window touch (33-D) của các user khác owner."""
     vectors = []
     for ud in sorted(Path(data_dir).iterdir()):
         if not ud.is_dir() or ud.name == owner_id:
             continue
-        csv = ud / "touch_session_features.csv"
-        if not csv.exists():
-            continue
-        try:
-            df = pd.read_csv(csv)
-        except Exception:
-            continue
-        for c in [c for c in FEATURE_COLS if c not in df.columns]:
-            df[c] = 0.0
-        mat = np.nan_to_num(df[FEATURE_COLS].to_numpy(np.float64))
-        if len(mat):
-            vectors.append(mat)
+        M = touch_subwindows(ud, all_sessions(ud))
+        if len(M):
+            vectors.append(M)
     if not vectors:
         return artifacts.pool_touch_scaled
     arr = np.vstack(vectors)
@@ -324,18 +317,13 @@ def enroll(owner_id, n_enroll_sessions, data_dir, encoder, artifacts,
     cohort = _build_inertial_pool(owner_id, impostor_dir, encoder, artifacts, data_mode, seed)
     cohort_mean, cohort_std = fit_cohort(anchors, cohort)
 
-    # ── Touch: RF owner-vs-pool (mức phiên), nếu có dữ liệu touch ──
+    # ── Touch: RF owner-vs-pool (sub-window 33-D), nếu có dữ liệu touch ──
     rf_touch = None
     if artifacts.has_touch:
         try:
-            owner_touch = []
-            for s in anchor_keys:
-                v = build_session_features(data_dir / owner_id, {s})
-                if v is not None and len(v) == TOUCH_DIM:
-                    owner_touch.append(v)
-            if len(owner_touch) >= 2:
-                ot = artifacts.transform_touch(
-                    np.asarray(owner_touch, np.float64)).astype(np.float32)
+            ot_raw = touch_subwindows(data_dir / owner_id, set(anchor_keys))
+            if len(ot_raw) >= 2:
+                ot = artifacts.transform_touch(ot_raw).astype(np.float32)
                 pool_t = _build_touch_pool(owner_id, impostor_dir, artifacts)
                 if len(pool_t):
                     Xt = np.concatenate([ot, pool_t], 0)
@@ -380,15 +368,16 @@ def _eer_threshold(y, s):
 
 
 def _touch_score(rf_touch, artifacts, user_dir, sid):
-    """Điểm touch mức phiên ∈[0,1], hoặc None nếu không có/không hợp lệ."""
+    """Điểm touch mức phiên ∈[0,1] = trung bình prob RF trên các sub-window
+    của phiên; None nếu không có/không hợp lệ."""
     if rf_touch is None:
         return None
-    v = build_session_features(user_dir, {sid})
-    if v is None or len(v) != TOUCH_DIM:
+    M = touch_subwindows(user_dir, {sid})
+    if len(M) == 0:
         return None
     try:
-        vs = artifacts.transform_touch(v.reshape(1, -1)).astype(np.float32)
-        return float(rf_touch.predict_proba(vs)[0, 1])
+        Ms = artifacts.transform_touch(M).astype(np.float32)
+        return float(rf_touch.predict_proba(Ms)[:, 1].mean())
     except Exception:
         return None
 

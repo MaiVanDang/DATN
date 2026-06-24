@@ -65,14 +65,6 @@ def pct5(arr):
     return float(np.percentile(arr, 25)), float(np.median(arr)), float(np.percentile(arr, 75))
 
 
-def stats5(arr, prefix: str) -> dict:
-    p25, med, p75 = pct5(arr)
-    m  = float(np.mean(arr)) if len(arr) >= 2 else np.nan
-    sd = float(np.std(arr))  if len(arr) >= 2 else np.nan
-    return {f"{prefix}_mean": m, f"{prefix}_std": sd,
-            f"{prefix}_median": med, f"{prefix}_p25": p25, f"{prefix}_p75": p75}
-
-
 ACTIVITIES = ["walking", "sitting", "standing"]
 
 
@@ -223,127 +215,6 @@ def process_scroll(sess_dir: Path, session_id: str) -> pd.DataFrame:
     return pd.DataFrame(gestures)[cols]
 
 
-def process_keystroke(sess_dir: Path, session_id: str) -> pd.DataFrame:
-    dfs = []
-    for f in sorted(sess_dir.glob("keystroke_r*.csv")):
-        try:
-            dfs.append(pd.read_csv(f))
-        except Exception:
-            continue
-    if not dfs:
-        return pd.DataFrame(columns=["session_id", "inter_key_ms", "is_delete", "timestamp_ms"])
-    df = pd.concat(dfs, ignore_index=True)
-    df["session_id"] = session_id
-    return df[["session_id", "inter_key_ms", "is_delete", "timestamp_ms"]]
-
-
-def aggregate_touch(tap_df: pd.DataFrame, sc_df: pd.DataFrame,
-                    key_df: pd.DataFrame, session_id: str) -> dict:
-    """Build 1 feature row 48-D cho 1 session từ 3 modal: tap (16), scroll (23), key (9)."""
-    feat = {"session_id": session_id}
-
-    tap = tap_df[tap_df["session_id"] == session_id] if not tap_df.empty else pd.DataFrame()
-    feat["tap_n"] = len(tap)
-    if len(tap) >= 2:
-        hold = tap["hold_ms"].values.astype(float)
-        disp = tap["displacement"].values.astype(float)
-        iti  = np.diff(tap["timestamp_ms"].sort_values().values.astype(float))
-    else:
-        hold = disp = iti = np.array([])
-    feat.update(stats5(hold, "tap_hold"))
-    feat.update(stats5(disp, "tap_disp"))
-    feat.update(stats5(iti,  "tap_iti"))
-
-    sc = sc_df[sc_df["session_id"] == session_id] if not sc_df.empty else pd.DataFrame()
-    feat["scroll_n"] = len(sc)
-
-    def sc2(col, prefix):
-        arr = sc[col].values if len(sc) >= 2 else np.array([])
-        m  = float(np.mean(arr)) if len(arr) >= 2 else np.nan
-        sd = float(np.std(arr))  if len(arr) >= 2 else np.nan
-        return {f"{prefix}_mean": m, f"{prefix}_std": sd}
-
-    for col, pfx in [
-        ("duration_ms", "scroll_dur"),  ("traj",     "scroll_traj"),
-        ("straight",    "scroll_sdist"), ("v_mean",  "scroll_vmean"),
-        ("v_max",       "scroll_vmax"),  ("v_last5", "scroll_vlast5"),
-        ("mrl",         "scroll_mrl"),   ("a_first5","scroll_afirst5"),
-    ]:
-        feat.update(sc2(col, pfx))
-
-    if len(sc) >= 2:
-        ang = sc["direction"].values
-        R   = np.sqrt(np.mean(np.cos(ang)) ** 2 + np.mean(np.sin(ang)) ** 2)
-        feat["scroll_dir_circmean"] = float(np.arctan2(np.mean(np.sin(ang)), np.mean(np.cos(ang))))
-        feat["scroll_dir_circstd"]  = float(np.sqrt(-2 * np.log(np.clip(R, 1e-10, 1.0))))
-    else:
-        feat["scroll_dir_circmean"] = feat["scroll_dir_circstd"] = np.nan
-
-    if len(sc) > 0:
-        dy = sc["disp_y"].values
-        dx = np.cos(sc["direction"].values) * sc["straight"].values
-        n  = len(sc)
-        feat["scroll_frac_up"]    = float(np.sum((dy < 0) & (np.abs(dy) > np.abs(dx))) / n)
-        feat["scroll_frac_down"]  = float(np.sum((dy > 0) & (np.abs(dy) > np.abs(dx))) / n)
-        feat["scroll_frac_left"]  = float(np.sum((dx < 0) & (np.abs(dx) > np.abs(dy))) / n)
-        feat["scroll_frac_right"] = float(np.sum((dx > 0) & (np.abs(dx) > np.abs(dy))) / n)
-    else:
-        feat["scroll_frac_up"] = feat["scroll_frac_down"] = \
-        feat["scroll_frac_left"] = feat["scroll_frac_right"] = np.nan
-
-    kdf = key_df[key_df["session_id"] == session_id] if not key_df.empty else pd.DataFrame()
-    n_total = len(kdf)
-    if n_total > 0:
-        del_rate = float(kdf["is_delete"].astype(bool).sum() / n_total)
-        clean    = kdf[(kdf["inter_key_ms"] > 0) &
-                       (~kdf["is_delete"].astype(bool)) &
-                       (kdf["inter_key_ms"] < 3000)]
-        iki  = clean["inter_key_ms"].values.astype(float)
-        n_ch = len(clean)
-        if n_ch >= 2:
-            dur_s        = (clean["timestamp_ms"].max() - clean["timestamp_ms"].min()) / 1000
-            typing_speed = float(n_ch / dur_s) if dur_s > 0 else np.nan
-        else:
-            typing_speed = np.nan
-        burst_rate = float(np.mean(iki < BURST_THR)) if len(iki) else np.nan
-    else:
-        iki = np.array([])
-        del_rate = typing_speed = burst_rate = np.nan
-        n_ch = 0
-
-    feat["key_n"] = n_ch
-    feat.update(stats5(iki, "key_inter"))
-    feat["key_delete_rate"]  = del_rate
-    feat["key_typing_speed"] = typing_speed
-    feat["key_burst_rate"]   = burst_rate
-
-    return feat
-
-
-TOUCH_COLS = [
-    "session_id",
-    "tap_n",
-    "tap_hold_mean", "tap_hold_std", "tap_hold_median", "tap_hold_p25", "tap_hold_p75",
-    "tap_disp_mean", "tap_disp_std", "tap_disp_median", "tap_disp_p25", "tap_disp_p75",
-    "tap_iti_mean",  "tap_iti_std",  "tap_iti_median",  "tap_iti_p25",  "tap_iti_p75",
-    "scroll_n",
-    "scroll_dur_mean",    "scroll_dur_std",
-    "scroll_traj_mean",   "scroll_traj_std",
-    "scroll_sdist_mean",  "scroll_sdist_std",
-    "scroll_vmean_mean",  "scroll_vmean_std",
-    "scroll_vmax_mean",   "scroll_vmax_std",
-    "scroll_vlast5_mean", "scroll_vlast5_std",
-    "scroll_mrl_mean",    "scroll_mrl_std",
-    "scroll_afirst5_mean","scroll_afirst5_std",
-    "scroll_dir_circmean","scroll_dir_circstd",
-    "scroll_frac_up",     "scroll_frac_down",
-    "scroll_frac_left",   "scroll_frac_right",
-    "key_n",
-    "key_inter_mean", "key_inter_std", "key_inter_median", "key_inter_p25", "key_inter_p75",
-    "key_delete_rate", "key_typing_speed", "key_burst_rate",
-]
-
-
 def process_user(user_dir: Path):
     uid     = user_dir.name
     out_dir = PROC_DIR / uid
@@ -362,8 +233,6 @@ def process_user(user_dir: Path):
     all_Xw, all_yw  = [], []
     all_Xi, all_yi  = [], []
     all_tap, all_sc = [], []
-    all_key         = []
-    touch_rows      = []
 
     for sess_dir in sessions:
         sname = sess_dir.name
@@ -372,18 +241,14 @@ def process_user(user_dir: Path):
         (Xw, yw), (Xi, yi) = process_inertial(sess_dir, label)
         tap = process_tap     (sess_dir, sname)
         sc  = process_scroll  (sess_dir, sname)
-        key = process_keystroke(sess_dir, sname)
 
         print(f"  {sname}: walk={len(Xw):>4} sit+stand={len(Xi)-len(Xw):>4} | "
-              f"tap={len(tap):>3} scroll={len(sc):>3} key={len(key):>3}")
+              f"tap={len(tap):>3} scroll={len(sc):>3}")
 
         if len(Xw):  all_Xw.append(Xw);  all_yw.append(yw)
         if len(Xi):  all_Xi.append(Xi);  all_yi.append(yi)
         if len(tap): all_tap.append(tap)
         if len(sc):  all_sc.append(sc)
-        if len(key): all_key.append(key)
-
-        touch_rows.append(aggregate_touch(tap, sc, key, sname))
 
     empty  = np.empty((0, WINDOW_SIZE, len(SENSOR_COLS)), np.float64)
     Xw_all = np.concatenate(all_Xw) if all_Xw else empty
@@ -400,9 +265,6 @@ def process_user(user_dir: Path):
         pd.concat(all_tap, ignore_index=True).to_csv(out_dir / "tap_gestures.csv",    index=False)
     if all_sc:
         pd.concat(all_sc,  ignore_index=True).to_csv(out_dir / "scroll_gestures.csv", index=False)
-
-    pd.DataFrame(touch_rows)[TOUCH_COLS].to_csv(
-        out_dir / "touch_session_features.csv", index=False)
 
     print(f"  -> walking={len(Xw_all)}  inertial={len(Xi_all)}  saved to processed/{uid}/")
 

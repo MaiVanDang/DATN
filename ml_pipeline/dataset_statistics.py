@@ -10,7 +10,6 @@ if not os.path.isdir(PROCESSED_DIR):
     sys.exit(f"[ERROR] Không tìm thấy thư mục: {PROCESSED_DIR}\n"
              f"        Hãy chỉnh PROCESSED_DIR trong script.")
 
-F_SESS   = "touch_session_features.csv"
 F_TAP    = "tap_gestures.csv"
 F_SCROLL = "scroll_gestures.csv"
 F_XI     = "X_inertial.npy"
@@ -64,18 +63,25 @@ for user_id in user_dirs:
         "total_imu":        n_iner + n_walk,
     })
 
-    path_sess = os.path.join(user_path, F_SESS)
-    if os.path.exists(path_sess):
-        df = pd.read_csv(path_sess)
-        df.insert(0, "user_id", user_id)
-        all_sess_rows.append(df)
-    else:
-        print(f"  [WARN] Không tìm thấy {F_SESS} cho {user_id}")
+    # Đếm tap/scroll mỗi session trực tiếp từ gesture files (mỗi dòng = 1 sự kiện)
+    tap_path = os.path.join(user_path, F_TAP)
+    scr_path = os.path.join(user_path, F_SCROLL)
+    tap_cnt = (pd.read_csv(tap_path).groupby("session_id").size()
+               if os.path.exists(tap_path) else pd.Series(dtype=int))
+    scr_cnt = (pd.read_csv(scr_path).groupby("session_id").size()
+               if os.path.exists(scr_path) else pd.Series(dtype=int))
+    for s in sorted(set(tap_cnt.index) | set(scr_cnt.index)):
+        all_sess_rows.append({
+            "user_id":    user_id,
+            "session_id": s,
+            "tap_n":      int(tap_cnt.get(s, 0)),
+            "scroll_n":   int(scr_cnt.get(s, 0)),
+        })
 
 if not all_sess_rows:
-    sys.exit("[ERROR] Không đọc được bất kỳ touch_session_features.csv nào.")
+    sys.exit("[ERROR] Không đọc được bất kỳ tap/scroll gestures nào.")
 
-sess_df  = pd.concat(all_sess_rows, ignore_index=True)
+sess_df  = pd.DataFrame(all_sess_rows)
 imu_df   = pd.DataFrame(imu_summary)
 
 W = 62
@@ -98,43 +104,38 @@ if imu_window_shape:
     print(f"\n  ► Shape mỗi mẫu: {imu_window_shape[0]} timesteps × "
           f"{imu_window_shape[1]} sensor axes")
 
-print("\n[2] TOUCH & KEYSTROKE — theo User")
+print("\n[2] TOUCH (tap + scroll) — theo User")
 print("-" * W)
 
 touch_by_user = (
     sess_df
-    .groupby("user_id")[["tap_n", "scroll_n", "key_n"]]
+    .groupby("user_id")[["tap_n", "scroll_n"]]
     .sum()
     .astype(int)
-    .rename(columns={"tap_n": "taps", "scroll_n": "scrolls", "key_n": "keystrokes"})
+    .rename(columns={"tap_n": "taps", "scroll_n": "scrolls"})
 )
-touch_by_user["touch(tap+scroll)"] = touch_by_user["taps"] + touch_by_user["scrolls"]
-touch_by_user["total"]             = touch_by_user["touch(tap+scroll)"] + touch_by_user["keystrokes"]
+touch_by_user["total"] = touch_by_user["taps"] + touch_by_user["scrolls"]
 
-print(f"  {'User':<12} {'Taps':>8} {'Scrolls':>9} {'Keystrokes':>12} "
-      f"{'Touch':>8} {'Total':>8}")
-print(f"  {'-'*12} {'-'*8} {'-'*9} {'-'*12} {'-'*8} {'-'*8}")
+print(f"  {'User':<12} {'Taps':>8} {'Scrolls':>9} {'Total':>8}")
+print(f"  {'-'*12} {'-'*8} {'-'*9} {'-'*8}")
 for uid, r in touch_by_user.iterrows():
-    print(f"  {uid:<12} {r['taps']:>8,} {r['scrolls']:>9,} "
-          f"{r['keystrokes']:>12,} {r['touch(tap+scroll)']:>8,} {r['total']:>8,}")
+    print(f"  {uid:<12} {r['taps']:>8,} {r['scrolls']:>9,} {r['total']:>8,}")
 
 gt = touch_by_user.sum()
-print(f"  {'TOTAL':<12} {gt['taps']:>8,} {gt['scrolls']:>9,} "
-      f"{gt['keystrokes']:>12,} {gt['touch(tap+scroll)']:>8,} {gt['total']:>8,}")
+print(f"  {'TOTAL':<12} {gt['taps']:>8,} {gt['scrolls']:>9,} {gt['total']:>8,}")
 
 print("\n[3] CHI TIẾT THEO SESSION")
 print("-" * W)
 
-det = sess_df[["user_id", "session_id", "tap_n", "scroll_n", "key_n"]].copy()
-det = det.astype({"tap_n": int, "scroll_n": int, "key_n": int})
-det["total"] = det["tap_n"] + det["scroll_n"] + det["key_n"]
+det = sess_df[["user_id", "session_id", "tap_n", "scroll_n"]].copy()
+det = det.astype({"tap_n": int, "scroll_n": int})
+det["total"] = det["tap_n"] + det["scroll_n"]
 
-print(f"  {'User':<12} {'Session':<14} {'Taps':>6} {'Scrolls':>8} "
-      f"{'Keys':>6} {'Total':>7}")
-print(f"  {'-'*12} {'-'*14} {'-'*6} {'-'*8} {'-'*6} {'-'*7}")
+print(f"  {'User':<12} {'Session':<14} {'Taps':>6} {'Scrolls':>8} {'Total':>7}")
+print(f"  {'-'*12} {'-'*14} {'-'*6} {'-'*8} {'-'*7}")
 for _, r in det.iterrows():
     print(f"  {r['user_id']:<12} {r['session_id']:<14} {r['tap_n']:>6} "
-          f"{r['scroll_n']:>8} {r['key_n']:>6} {r['total']:>7}")
+          f"{r['scroll_n']:>8} {r['total']:>7}")
 
 print("\n" + "=" * W)
 print("  TÓM TẮT TỔNG QUAN")
@@ -144,7 +145,5 @@ print(f"  Tổng số Session             : {sess_df['session_id'].nunique()}")
 print(f"  Tổng mẫu IMU — Inertial     : {total_inertial:,}")
 print(f"  Tổng mẫu IMU — Walking      : {total_walking:,}")
 print(f"  Tổng mẫu IMU (tất cả)       : {total_imu:,}")
-print(f"  Tổng Touch  (tap + scroll)  : {int(gt['touch(tap+scroll)']):,}")
-print(f"  Tổng Keystroke              : {int(gt['keystrokes']):,}")
-print(f"  Tổng Touch + Keystroke      : {int(gt['total']):,}")
+print(f"  Tổng Touch  (tap + scroll)  : {int(gt['total']):,}")
 print("=" * W)

@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="Claude">
   <diagram name="Kiến trúc tổng quan" id="tongquan">
-    <mxGraphModel dx="1970" dy="1070" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="950" math="0" shadow="0">
+    <mxGraphModel dx="1236" dy="740" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="950" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -13,7 +13,7 @@
         <mxCell id="t1_imu" parent="t1" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;" value="Thu cảm biến&#xa;Acc · Gyro · Magnetometer (≈50 Hz)" vertex="1">
           <mxGeometry height="70" width="240" x="35" y="180" as="geometry" />
         </mxCell>
-        <mxCell id="t1_touch" parent="t1" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;" value="Thu hành vi chạm &#xa;Tap · Scroll · Keytroke" vertex="1">
+        <mxCell id="t1_touch" parent="t1" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;" value="Thu hành vi chạm &#xa;Tap · Scroll" vertex="1">
           <mxGeometry height="60" width="240" x="35" y="290" as="geometry" />
         </mxCell>
         <mxCell id="t1_csv" parent="t1" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;" value="Ghi theo phiên (.csv)" vertex="1">
@@ -51,16 +51,16 @@
         <mxCell id="9MMdJsmxUz1UwZfLJiMb-1" edge="1" parent="t2" source="t2_pre" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="t2_qc">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="t2_pre" parent="t2" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;" value="step2 - Tiền xử lý&#xa;Cửa sổ trượt IMU 200×9 &#xa;z-score per-window&#xa;Touch 48-D (tap16 + scroll23 + key9)" vertex="1">
+        <mxCell id="t2_pre" parent="t2" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;" value="step2 - Tiền xử lý&#xa;Cửa sổ trượt IMU 200×9 &#xa;z-score per-window&#xa;Touch (tap + scroll)" vertex="1">
           <mxGeometry height="70" width="290" x="40" y="180" as="geometry" />
         </mxCell>
         <mxCell id="t2_split" parent="t2" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;" value="Tách danh tính (open-set)&#xa;SEEN · HELD-OUT" vertex="1">
           <mxGeometry height="50" width="290" x="40" y="290" as="geometry" />
         </mxCell>
-        <mxCell id="t2_bb" parent="t2" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;" value="Stage 1 - Train backbone&#xa;CNN / ConvLSTM / ConvLSTM-Bi" vertex="1">
+        <mxCell id="t2_bb" parent="t2" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;labelBackgroundColor=none;fontColor=default;" value="Stage 1 - Train backbone&#xa;CNN / CNN-LSTM / CNN-BiLSTM" vertex="1">
           <mxGeometry height="50" width="290" x="40" y="380" as="geometry" />
         </mxCell>
-        <mxCell id="t2_pool" parent="t2" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;" value="Stage 2 - Impostor pool + touch scaler (từ SEEN)&#xa;inertial (100×128) · touch (100×48)" vertex="1">
+        <mxCell id="t2_pool" parent="t2" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;" value="Stage 2 - Impostor pool + touch scaler (từ SEEN)&#xa;inertial (100×128) · touch (đối chứng)" vertex="1">
           <mxGeometry height="50" width="290" x="40" y="470" as="geometry" />
         </mxCell>
         <mxCell id="rs1sj0U2jJzYIPNjVIpw-1" edge="1" parent="t2" source="t2_eval" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=13;" target="t2_pool" value="">
@@ -99,10 +99,10 @@
         <mxCell id="t3_enroll" parent="t3" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;" value="Enrollment" vertex="1">
           <mxGeometry height="40" width="280" x="45" y="180" as="geometry" />
         </mxCell>
-        <mxCell id="t3_svc" parent="t3" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;" value="Thu IMU + touch liên tục &#xa;→ scaler" vertex="1">
+        <mxCell id="t3_svc" parent="t3" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;fontColor=default;" value="Thu IMU&#xa;→ anchors + cohort + ngưỡng per-owner" vertex="1">
           <mxGeometry height="50" width="280" x="45" y="250" as="geometry" />
         </mxCell>
-        <mxCell id="t3_score" parent="t3" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;" value="Chấm điểm&#xa;TFLite embedding → cosine-to-anchors &#xa;→ sigmoid" vertex="1">
+        <mxCell id="t3_score" parent="t3" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;" value="Chấm điểm&#xa;cosine → z-norm (cohort) → sigmoid" vertex="1">
           <mxGeometry height="70" width="280" x="45" y="330" as="geometry" />
         </mxCell>
         <mxCell id="t3_fuse" parent="t3" style="rounded=1;arcSize=12;fillColor=#E6E6E6;strokeColor=#000000;fontSize=13;align=center;" value="Motion-gate → EWMA&#xa;→ TRUSTED / WARNING / UNKNOWN" vertex="1">
