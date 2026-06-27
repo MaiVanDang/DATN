@@ -22,20 +22,20 @@ Tuy nhiên, phần lớn các nghiên cứu hiện có vẫn còn những khoả
 \section{Mục tiêu và định hướng giải pháp}
 \label{sec:muctieu}
 
-Từ những hạn chế đã phân tích, đề tài hướng tới xây dựng một hệ thống xác thực hành vi liên tục hoàn chỉnh trên nền tảng Android với ba nhóm mục tiêu cụ thể sau đây.
+Từ những hạn chế đã phân tích, đề tài hướng tới xây dựng một hệ thống xác thực hành vi liên tục hoàn chỉnh trên nền tảng Android với 3 nhóm mục tiêu cụ thể sau đây.
 
 Về mặt kỹ thuật, đề tài xây dựng một hệ thống xác thực hành vi liên tục chạy hoàn toàn trên thiết bị Android thông qua TensorFlow Lite nhằm đảm bảo quyền riêng tư và khả năng hoạt động ngoại tuyến. Đề tài khảo sát hướng đa phương thức kết hợp dữ liệu cảm biến quán tính 9 kênh với hành vi tương tác màn hình; kết quả đánh giá ở Chương 5 cho thấy với bộ dữ liệu hiện có thì nhánh quán tính cho kết quả và hiệu năng tốt hơn ở kịch bản phát hiện người lạ nên đường quyết định triển khai cuối cùng chỉ sử dụng cảm biến quán tính. Hệ thống tích hợp cơ chế phát hiện người dùng lạ dựa trên ngưỡng điểm tin cậy và cơ chế xác thực dự phòng bằng cử chỉ lắc điện thoại cá nhân khi phát hiện bất thường.
 
-Về phía ứng dụng, đề tài xây dựng hai ứng dụng Android độc lập minh họa toàn bộ luồng hoạt động thực tế: ứng dụng \textit{BioAuth Data Collection} phục vụ thu thập dữ liệu và ứng dụng \textit{BioAuth Authenticator} mô phỏng triển khai thực tế. Ngoài ra, một web demo bằng Streamlit được xây dựng để trực quan hóa quá trình ra quyết định ở mức phiên, trình bày đồng thời điểm của nhánh quán tính, nhánh tương tác và điểm dung hợp cùng hai cột kết luận tương ứng, qua đó minh họa năng lực đa phương thức của hệ thống và cho phép kiểm chứng trên người dùng ngoài tập huấn luyện.
+Về phía ứng dụng, đề tài xây dựng 2 ứng dụng Android độc lập minh họa toàn bộ luồng hoạt động thực tế: ứng dụng \textit{BioAuth Data Collection} phục vụ thu thập dữ liệu và ứng dụng \textit{BioAuth Authenticator} mô phỏng triển khai thực tế. Ngoài ra, một web demo bằng Streamlit được xây dựng để trực quan hóa quá trình ra quyết định ở mức phiên, trình bày đồng thời điểm của nhánh quán tính, nhánh tương tác và điểm dung hợp cùng 2 cột kết luận tương ứng, qua đó minh họa năng lực đa phương thức của hệ thống và cho phép kiểm chứng trên người dùng ngoài tập huấn luyện.
 
 Về mặt nghiên cứu, đề tài thực hiện đánh giá có hệ thống thông qua so sánh hiệu năng giữa các biến thể kiến trúc backbone CNN 1D, CNN-LSTM và CNN-BiLSTM theo các chỉ số FAR, FRR và EER. Đồng thời đánh giá mức độ đóng góp của từng phương thức và khả năng tổng quát hóa của hệ thống với người dùng chưa xuất hiện trong tập huấn luyện.
 
-Phạm vi của đề tài tập trung vào nền tảng Android phiên bản 10 trở lên với bộ dữ liệu thu từ 26 người tham gia thực hiện ba hoạt động chuẩn hóa là đi bộ, đứng và ngồi; dữ liệu được thu theo giao thức chuẩn hóa trong điều kiện sử dụng tự nhiên và trải trên nhiều dòng thiết bị khác nhau. Đề tài không bao gồm các phương pháp sinh trắc học sinh lý truyền thống, bảo mật tầng mạng, đánh giá chéo có kiểm soát giữa các thiết bị (huấn luyện trên một số dòng máy và kiểm thử trên dòng máy khác), hay cập nhật mô hình trực tuyến. Về mô hình đe dọa, đề tài đánh giá hệ thống trước người lạ \textit{zero-effort} và không bao gồm việc đánh giá trước các kẻ tấn công chủ động như bắt chước hành vi, phát lại tín hiệu cảm biến hay quan sát trộm mã cử chỉ lắc.
+Phạm vi của đề tài tập trung vào nền tảng Android phiên bản 10 trở lên với bộ dữ liệu thu từ 26 người tham gia thực hiện 3 hoạt động chuẩn hóa là đi bộ, đứng và ngồi; dữ liệu được thu theo giao thức chuẩn hóa trong điều kiện sử dụng tự nhiên và trải trên nhiều dòng thiết bị khác nhau. Đề tài không bao gồm các phương pháp sinh trắc học sinh lý truyền thống, bảo mật tầng mạng, đánh giá chéo có kiểm soát giữa các thiết bị (huấn luyện trên một số dòng máy và kiểm thử trên dòng máy khác), hay cập nhật mô hình trực tuyến. Về mô hình đe dọa, đề tài đánh giá hệ thống trước người lạ \textit{zero-effort} và không bao gồm việc đánh giá trước các kẻ tấn công chủ động như bắt chước hành vi, phát lại tín hiệu cảm biến hay quan sát trộm mã cử chỉ lắc.
 
 \section{Đóng góp của đề tài}
 \label{sec:donggop}
 
-Đề tài có bốn đóng góp chính sau đây.
+Đề tài có 4 đóng góp chính sau đây.
 
 Thứ nhất, xây dựng ứng dụng Android thu thập dữ liệu hành vi phục vụ toàn bộ giai đoạn tạo bộ dữ liệu nghiên cứu. Từ đó xây dựng được bộ dữ liệu gồm 26 người tham gia với đầy đủ 3 loại hoạt động và 2 dạng tác vụ tương tác màn hình chuẩn hóa.
 
@@ -48,7 +48,7 @@ Thứ tư, hoàn tất vòng xác thực bằng một cơ chế dự phòng đơ
 \section{Bố cục đồ án}
 \label{sec:bocuc}
 
-Phần còn lại của báo cáo được tổ chức thành sáu chương như sau.
+Phần còn lại của báo cáo được tổ chức thành 6 chương như sau.
 
 Chương 2 trình bày các kiến thức nền tảng cần thiết cho đề tài, bao gồm nguyên lý hoạt động của sinh trắc học hành vi, đặc điểm của dữ liệu cảm biến quán tính và hành vi touch trên Android, các mô hình học máy được sử dụng trong hệ thống, cũng như tổng quan các công trình liên quan và khoảng trống nghiên cứu mà đề tài hướng tới giải quyết.
 
@@ -56,7 +56,7 @@ Chương 3 mô tả quá trình thu thập dữ liệu, bao gồm thiết kế �
 
 Chương 4 trình bày quá trình xây dựng mô hình, gồm huấn luyện và so sánh các biến thể kiến trúc backbone cho dữ liệu IMU, huấn luyện bộ phân loại Random Forest cho dữ liệu touch, thiết kế cơ chế dung hợp đa phương thức và xuất mô hình sang định dạng TFLite.
 
-Chương 5 trình bày thiết kế thực nghiệm và kết quả đánh giá hệ thống theo các chỉ số FAR, FRR và EER, so sánh ba kiến trúc backbone trên hai kịch bản nhận dạng tập đóng và tập mở, phân tích đóng góp của từng phương thức và khả năng tổng quát hóa với người dùng mới, từ đó rút ra cấu hình phù hợp nhất cho triển khai.
+Chương 5 trình bày thiết kế thực nghiệm và kết quả đánh giá hệ thống theo các chỉ số FAR, FRR và EER, so sánh 3 kiến trúc backbone trên 2 kịch bản nhận dạng tập đóng và tập mở, phân tích đóng góp của từng phương thức và khả năng tổng quát hóa với người dùng mới, từ đó rút ra cấu hình phù hợp nhất cho triển khai.
 
 Chương 6 mô tả quá trình tích hợp và triển khai cấu hình đã chọn trên Android, bao gồm kiến trúc ứng dụng xác thực, cơ chế suy luận on-device, luồng đăng ký người dùng, dịch vụ xác thực liên tục trong nền và cơ chế xác thực dự phòng bằng cử chỉ lắc.
 

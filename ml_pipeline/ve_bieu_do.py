@@ -31,13 +31,17 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
 import step2_preprocess as s
 
 USER_DON = "user16"
+
+# Cờ điều khiển _save(): mặc định phục vụ CLI (lưu file, không hiện).
+# Notebook đặt SHOW=True, SAVE=False để chỉ xem; bật SAVE=True khi muốn lưu.
+SAVE = True
+SHOW = False
 
 HZ       = s.HZ
 ACC      = ["acc_x", "acc_y", "acc_z"]
@@ -56,10 +60,14 @@ plt.rcParams.update({
 
 
 def _save(fig, out, name):
-    path = Path(out) / name
-    fig.savefig(path)
-    plt.close(fig)
-    print(f"  -> {name}")
+    if SAVE:
+        Path(out).mkdir(parents=True, exist_ok=True)
+        fig.savefig(Path(out) / name)
+        print(f"  -> đã lưu {name}")
+    if SHOW:
+        plt.show()          # hiện inline trong notebook
+    else:
+        plt.close(fig)
 
 
 def _walking_files(data_dir):
@@ -92,9 +100,14 @@ def _pick_raw(data_dir, activity, user, session):
 
 
 def _load_processed(proc_dir):
-    """Đọc .npy theo từng user -> dict {cfg: {X, y}} cho 'all' và 'walking'."""
+    """Đọc .npy theo từng user -> dict {cfg: {X, y}} cho 'all' và 'walking'.
+
+    Chỉ tính các user thuộc bộ dữ liệu (user<số>); bỏ qua dataroot và các
+    probe userA..userE để khớp với 26 người dùng nêu trong báo cáo.
+    """
     res = {"all": {"X": [], "y": []}, "walking": {"X": [], "y": []}}
-    for d in sorted(p for p in Path(proc_dir).iterdir() if p.is_dir()):
+    for d in sorted(p for p in Path(proc_dir).iterdir()
+                    if p.is_dir() and re.fullmatch(r"user\d+", p.name)):
         for cfg, xn, yn in [("all", "X_inertial.npy", "y_inertial.npy"),
                             ("walking", "X_walking.npy", "y_walking.npy")]:
             xp, yp = d / xn, d / yn
@@ -146,7 +159,8 @@ def plot_phanbo(res, out):
     ax.bar(["Walking", "All"], [n_walk, n_all], color=["#55A868", "#4C72B0"])
     ax.set_ylabel("Số cửa sổ")
     for i, v in enumerate([n_walk, n_all]):
-        ax.text(i, v, f"{v:,}", ha="center", va="bottom", fontsize=9)
+        ax.text(i, v, f"{v:,}".replace(",", "."),   # dấu chấm ngăn cách nghìn (kiểu VN)
+                ha="center", va="bottom", fontsize=9)
     _save(fig, out, "phanbo_theo_cauhinh.png")
 
 
@@ -322,7 +336,110 @@ def plot_cua_so_truot(files, out, n_win=6):
     _save(fig, out, "cua_so_truot.png")
 
 
+# ──────────────────────────────────────────────────────────────────────
+#  Kiểm tra chất lượng & phân đoạn tín hiệu (mục 3.4.1)
+#  Dùng ĐÚNG ngưỡng và logic của pipeline: s.MAX_GAP_SEC và s.WINDOW_SIZE.
+# ──────────────────────────────────────────────────────────────────────
+C_KEEP, C_DROP, C_GAP = "#1f6fb2", "#d62728", "#f3b0b0"
+
+
+def find_gaps(df):
+    """Phát hiện điểm gián đoạn GIỐNG HỆT step2_preprocess.split_segments.
+
+    Trả về dict gồm: df đã sắp xếp theo thời gian, mảng thời gian giây (t),
+    danh sách chỉ số gap, độ dài mỗi gap (ms), các đoạn liên tục và cờ giữ/loại.
+    """
+    ts_col, to_sec = s._ts_info(df)
+    df = df.sort_values(ts_col).reset_index(drop=True)
+    diffs = df[ts_col].diff() / to_sec                      # giây, NaN ở phần tử đầu
+    gap_idx = list(diffs[diffs > s.MAX_GAP_SEC].index)      # ĐÚNG ngưỡng pipeline
+    bounds = [0] + gap_idx + [len(df)]
+    segs = []
+    for i in range(len(bounds) - 1):
+        a, b = bounds[i], bounds[i + 1]
+        segs.append((a, b, b - a, (b - a) >= s.WINDOW_SIZE))  # keep nếu ≥ 1 cửa sổ
+    t = (df[ts_col].to_numpy(float) - df[ts_col].iloc[0]) / to_sec
+    return {"df": df, "t": t, "gap_idx": gap_idx,
+            "gap_ms": [float(diffs.iloc[i] * 1000) for i in gap_idx],  # diffs đã ở giây
+            "segs": segs}
+
+
+def report_gaps(info, src):
+    """In ra cách tính các con số (số mẫu, thời lượng, số khoảng trống)."""
+    df, t = info["df"], info["t"]
+    thr_ms = s.MAX_GAP_SEC * 1000
+    print(f"\n  Nguồn: {src}")
+    print(f"  • Số mẫu      = số dòng           = {len(df):,}")
+    print(f"  • Thời lượng  = (t_cuối - t_đầu)   = {t[-1]:.1f} s")
+    print(f"  • Ngưỡng gián đoạn = 5 chu kỳ = 5/{s.HZ}Hz = {thr_ms:.0f} ms")
+    print(f"  • Số khoảng trống > ngưỡng        = {len(info['gap_idx'])}")
+    for k, (i, g) in enumerate(zip(info["gap_idx"], info["gap_ms"]), 1):
+        print(f"      gap {k}: tại mẫu #{i}, dài {g:.0f} ms (~{g / (1000/s.HZ):.0f} mẫu bị mất)")
+    seglen = [n for _, _, n, _ in info["segs"]]
+    dropped = [n for _, _, n, keep in info["segs"] if not keep]
+    print(f"  • {len(seglen)} đoạn liên tục, độ dài (mẫu) = {seglen}")
+    print(f"  • Đoạn < 1 cửa sổ ({s.WINDOW_SIZE} mẫu) bị LOẠI = {dropped}")
+
+
+def _auto_zoom(info, pad=3.0):
+    """Vùng phóng to tự động: bao quanh các đoạn ngắn bị loại, đệm pad giây."""
+    t = info["t"]
+    shorts = [(a, b) for a, b, _n, keep in info["segs"] if not keep]
+    if not shorts:
+        return None
+    t0 = t[min(a for a, _ in shorts)]
+    t1 = t[min(max(b for _, b in shorts), len(t) - 1)]
+    return max(0.0, t0 - pad), min(t[-1], t1 + pad)
+
+
+def _draw_segments(ax, info, x0, x1):
+    df, t = info["df"], info["t"]
+    acc = np.sqrt(sum(df[c].to_numpy(float) ** 2 for c in ACC))
+    for i in info["gap_idx"]:                                  # tô khoảng trống
+        ax.axvspan(t[i - 1], t[i], color=C_GAP, zorder=0)
+    for a, b, n, keep in info["segs"]:                         # vẽ từng đoạn
+        ax.plot(t[a:b], acc[a:b], color=C_KEEP if keep else C_DROP,
+                lw=1.0 if keep else 2.0, marker=None if keep else "o", ms=3, zorder=3)
+    ax.set_xlim(x0, x1)
+    ax.set_xlabel("Thời gian (s)"); ax.set_ylabel("|gia tốc| (m/s$^2$)")
+
+
+def plot_phan_doan(data_dir, out, user, session, activity, attempt, zoom):
+    """Hình 3.4.1: phân đoạn tín hiệu thật + phóng to một khoảng trống.
+
+    zoom: None -> tự động (quanh đoạn ngắn bị loại);
+          (t0, t1) -> phóng to khoảng thời gian chỉ định (giây).
+    """
+    src = Path(data_dir) / user / f"session_{session}" / f"{activity}_att{attempt}.csv"
+    if not src.exists():
+        print(f"  [bỏ qua] phan_doan: không thấy {src}")
+        return
+    info = find_gaps(pd.read_csv(src))
+    report_gaps(info, src)
+
+    from matplotlib.patches import Patch
+    legend = [Patch(color=C_KEEP, label="Đoạn hợp lệ (giữ lại)"),
+              Patch(color=C_DROP, label="Đoạn ngắn (loại bỏ)"),
+              Patch(color=C_GAP, label="Khoảng trống")]
+    zr = zoom or _auto_zoom(info)
+
+    fig, ax = plt.subplots(figsize=(10, 3.2))                  # (a) toàn tệp
+    _draw_segments(ax, info, info["t"][0], info["t"][-1])
+    if zr:
+        ax.axvspan(zr[0], zr[1], facecolor="none", edgecolor="#444", ls="--", lw=1.2, zorder=5)
+    ax.legend(handles=legend, loc="upper center", ncol=3, fontsize=8.5, framealpha=0.9)
+    _save(fig, out, "phan_doan_a.png")
+
+    if zr:                                                     # (b) phóng to
+        fig, ax = plt.subplots(figsize=(10, 3.2))
+        _draw_segments(ax, info, zr[0], zr[1])
+        _save(fig, out, "phan_doan_b.png")
+
+
 def main():
+    global SAVE, SHOW
+    plt.switch_backend("Agg")          # CLI: chạy không cần màn hình
+    SAVE, SHOW = True, False
     ap = argparse.ArgumentParser(description="Sinh toàn bộ biểu đồ minh họa dữ liệu")
     ap.add_argument("--data_dir", default="./data", help="Thư mục dữ liệu thô (.csv)")
     ap.add_argument("--proc_dir", default="./processed", help="Thư mục đã tiền xử lý (.npy)")
@@ -330,36 +447,59 @@ def main():
     ap.add_argument("--user", default=USER_DON, help="User cho các biểu đồ 1 user (1, 4, tín hiệu thô)")
     ap.add_argument("--session", default="1")
     ap.add_argument("--seconds", type=float, default=10.0)
+    ap.add_argument("--only", default="all",
+                    choices=["all", "phanbo", "tin_hieu", "zscore", "phan_doan"],
+                    help="Chỉ vẽ một nhóm biểu đồ")
+    # tham số riêng cho hình phân đoạn (mục 3.4.1)
+    ap.add_argument("--pd_user", default="user4", help="User cho hình phân đoạn")
+    ap.add_argument("--pd_session", default="6")
+    ap.add_argument("--pd_activity", default="sitting")
+    ap.add_argument("--pd_attempt", default="1")
+    ap.add_argument("--zoom", default=None,
+                    help="Khoảng phóng to 't0,t1' (giây); bỏ trống = tự động quanh đoạn bị loại")
     args = ap.parse_args()
 
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
+    only = args.only
 
-    print("[A] Phân bố sau tiền xử lý")
-    if Path(args.proc_dir).is_dir():
-        res = _load_processed(args.proc_dir)
-        if len(res["all"]["y"]):
-            plot_phanbo(res, out)
+    if only in ("all", "phanbo"):
+        print("[A] Phân bố sau tiền xử lý")
+        if Path(args.proc_dir).is_dir():
+            res = _load_processed(args.proc_dir)
+            if len(res["all"]["y"]):
+                plot_phanbo(res, out)
+            else:
+                print("  [bỏ qua] không đọc được .npy hợp lệ trong", args.proc_dir)
         else:
-            print("  [bỏ qua] không đọc được .npy hợp lệ trong", args.proc_dir)
-    else:
-        print("  [bỏ qua] không thấy", args.proc_dir)
+            print("  [bỏ qua] không thấy", args.proc_dir)
 
-    print("[B] Tín hiệu thô (đi bộ vs ngồi)")
-    plot_tin_hieu_tho(args.data_dir, out, args.user, args.session, args.seconds)
+    if only in ("all", "tin_hieu"):
+        print("[B] Tín hiệu thô (đi bộ vs ngồi)")
+        plot_tin_hieu_tho(args.data_dir, out, args.user, args.session, args.seconds)
 
-    print("[C] Minh họa cửa sổ trượt & chuẩn hóa Z-score")
-    files = _walking_files(args.data_dir)
-    if not files:
-        print("  [bỏ qua] không thấy walking_*.csv trong", args.data_dir)
-    else:
-        one = [(u, f) for u, f in files if u == args.user]
-        if not one:
-            print(f"  [bỏ qua] biểu đồ 1 user: không thấy {args.user}")
+    if only in ("all", "zscore"):
+        print("[C] Minh họa cửa sổ trượt & chuẩn hóa Z-score")
+        files = _walking_files(args.data_dir)
+        if not files:
+            print("  [bỏ qua] không thấy walking_*.csv trong", args.data_dir)
         else:
-            plot_cua_so_truot(one, out)
-            plot_window_zscore(one, out)
-        plot_zscore_users(files, out)
-        plot_scale_kenh(files, out)
+            one = [(u, f) for u, f in files if u == args.user]
+            if not one:
+                print(f"  [bỏ qua] biểu đồ 1 user: không thấy {args.user}")
+            else:
+                plot_cua_so_truot(one, out)
+                plot_window_zscore(one, out)
+            plot_zscore_users(files, out)
+            plot_scale_kenh(files, out)
+
+    if only in ("all", "phan_doan"):
+        print("[D] Kiểm tra chất lượng & phân đoạn tín hiệu (mục 3.4.1)")
+        zoom = None
+        if args.zoom:
+            t0, t1 = (float(x) for x in args.zoom.split(","))
+            zoom = (t0, t1)
+        plot_phan_doan(args.data_dir, out, args.pd_user, args.pd_session,
+                       args.pd_activity, args.pd_attempt, zoom)
 
     print(f"\n✓ Hoàn tất. Biểu đồ tại: {out.resolve()}/")
 
