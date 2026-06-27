@@ -23,11 +23,6 @@ TOUCH_TARGET = {
     'scroll':    600,
 }
 
-OUTLIER_RATIO_THRESH = 3.0
-MIN_SESSIONS_FOR_Z   = 4
-MAD_MIN              = 1e-6
-TOP_K_COLS           = 5
-
 
 def fmt_time(sec: float) -> str:
     """Định dạng giây thành 'MpSSs', vd 19.5 → '0p19s'."""

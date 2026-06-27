@@ -24,11 +24,11 @@ Như vậy, pipeline đề xuất kết nối bốn giai đoạn thành một v�
 \section{Thiết kế thu thập dữ liệu}
 \label{sec:thietke}
 
-Bộ dữ liệu được xây dựng từ 26 người tham gia tình nguyện với độ tuổi và thói quen sử dụng điện thoại đa dạng. Mỗi người thực hiện thu thập trong nhiều phiên độc lập, mỗi phiên bao gồm ba hoạt động chuẩn hóa là đi bộ, đứng yên và ngồi với thời lượng mục tiêu mặc định 360 giây cho mỗi hoạt động (có thể điều chỉnh trong giao diện), tiếp theo là một đến hai lượt điền biểu mẫu tương tác màn hình chuẩn hóa.
+Bộ dữ liệu được xây dựng từ 26 người tham gia tình nguyện với độ tuổi và thói quen sử dụng điện thoại đa dạng. Mỗi người thực hiện thu thập trong 6 phiên độc lập, mỗi phiên bao gồm ba hoạt động chuẩn hóa là đi bộ, đứng yên và ngồi với thời lượng mục tiêu mặc định 360 giây cho mỗi hoạt động (có thể điều chỉnh trong giao diện). Tiếp theo là 1 đến 2 lượt điền biểu mẫu tương tác màn hình chuẩn hóa.
 
 Điểm khác biệt quan trọng trong thiết kế thu thập của đề tài là không áp đặt điều kiện tư thế hay môi trường cố định. Người tham gia được khuyến khích thực hiện các hoạt động theo cách tự nhiên nhất của họ: đi bộ trong hành lang, sân hoặc đường phố; đứng hoặc ngồi tại bất kỳ địa điểm nào trong sinh hoạt thường ngày. Cách tiếp cận này nhằm thu thập hành vi sử dụng điện thoại thực tế thay vì hành vi nhân tạo trong môi trường phòng thí nghiệm kiểm soát chặt, từ đó tăng khả năng tổng quát hóa của mô hình trong điều kiện triển khai thực tế.
 
-Về phần cứng, bộ dữ liệu được thu thập trên 19 dòng thiết bị khác nhau từ năm hãng sản xuất phổ biến cùng một nhóm thiết bị khác, với phiên bản Android trải dài từ 8.1 đến 16. Bảng~\ref{tab:devices} tổng hợp thông tin về các thiết bị sử dụng.
+Về phần cứng, bộ dữ liệu được thu thập trên 19 thiết bị khác nhau từ 5 hãng sản xuất phổ biến cùng 1 nhóm thiết bị khác, với phiên bản Android trải dài từ 8.1 đến 16. Bảng~\ref{tab:devices} tổng hợp thông tin về các thiết bị sử dụng.
 
 \begin{table}[H]
     \centering
@@ -56,31 +56,31 @@ Về phần cứng, bộ dữ liệu được thu thập trên 19 dòng thiết 
     \end{tabular}
 \end{table}
 
-Sự đa dạng về phần cứng này là có chủ đích: các hãng khác nhau sử dụng chip cảm biến quán tính khác nhau, dẫn đến sự biến thiên về tần số lấy mẫu thực tế, độ nhiễu và đặc tính tín hiệu. Một mô hình được huấn luyện trên bộ dữ liệu đa thiết bị như vậy có tính thực tiễn cao hơn so với các công trình được thu thập trên một hoặc vài dòng máy đồng nhất, đây cũng là điểm khắc phục hạn chế được chỉ ra trong phân tích công trình liên quan tại Chương 2.
+Sự đa dạng về phần cứng này là có chủ đích: các hãng khác nhau sử dụng chip cảm biến quán tính khác nhau, dẫn đến sự biến thiên về tần số lấy mẫu thực tế, độ nhiễu và đặc tính tín hiệu. Một mô hình được huấn luyện trên bộ dữ liệu đa thiết bị như vậy có tính thực tiễn cao hơn so với các công trình được thu thập trên một hoặc vài dòng máy đồng nhất. Đây cũng là điểm khắc phục hạn chế được chỉ ra trong phân tích công trình liên quan tại Chương 2.
 
 \section{Ứng dụng BioAuth Data Collection}
 \label{sec:appthuthu}
 
-Để thu thập dữ liệu một cách nhất quán trên nhiều người tham gia và nhiều thiết bị khác nhau, đề tài xây dựng ứng dụng Android chuyên dụng \textit{BioAuth Data Collection} (tên mã nội bộ DataCollectV2). Ứng dụng được phát triển bằng Kotlin 2.0.21, hỗ trợ từ Android 7.0 (API level 24) trở lên, và được tổ chức thành bốn màn hình chính theo một luồng tuyến tính: đăng ký thông tin, thu cảm biến quán tính, điền biểu mẫu tương tác và xuất dữ liệu.
+Để thu thập dữ liệu một cách nhất quán trên nhiều người tham gia và nhiều thiết bị khác nhau, đề tài xây dựng ứng dụng Android chuyên dụng \textit{BioAuth Data Collection}. Ứng dụng được phát triển bằng Kotlin 2.0.21, hỗ trợ từ Android 7.0 (API level 24) trở lên, và được tổ chức thành 4 màn hình chính theo 1 luồng tuyến tính: đăng ký thông tin, thu cảm biến quán tính, điền biểu mẫu tương tác và xuất dữ liệu.
 
 \subsection{Màn hình đăng ký}
 
-Trước khi bắt đầu thu thập, người tham gia khai báo thông tin cá nhân trên màn hình đăng ký, gồm tên, tuổi, giới tính và tay thuận; trong đó giới tính và tay thuận được chọn từ danh sách định sẵn nhằm tránh sai lệch khi nhập tự do. Thông tin thiết bị, gồm hãng sản xuất, model và phiên bản Android, được ứng dụng tự động ghi nhận từ hệ thống mà không yêu cầu người dùng tự nhập. Giao diện màn hình đăng ký được minh họa trong Hình~\ref{fig:dangky}.
+Trước khi bắt đầu thu thập, người tham gia khai báo thông tin cá nhân trên màn hình đăng ký gồm tên, tuổi, giới tính và tay thuận; trong đó giới tính và tay thuận được chọn từ danh sách định sẵn nhằm tránh sai lệch khi nhập tự do. Thông tin thiết bị gồm hãng sản xuất, model và phiên bản Android được ứng dụng tự động ghi nhận từ hệ thống mà không yêu cầu người dùng tự nhập. Giao diện màn hình đăng ký được minh họa trong Hình~\ref{fig:dangky}.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.28\textwidth,height=0.42\textheight,keepaspectratio]{Hinh_ve/Collectdata/screen_register.jpg}
+    \includegraphics[width=0.28\textwidth,height=0.42\textheight,keepaspectratio]{../Hinh_ve/Collectdata/screen_register.jpg}
     \caption{Giao diện màn hình đăng ký của ứng dụng BioAuth Data Collection}
     \label{fig:dangky}
 \end{figure}
 
-Như thể hiện trong Hình~\ref{fig:dangky}, màn hình đăng ký còn hiển thị một bản thông báo đồng thuận, nêu rõ ứng dụng chỉ thu dữ liệu cảm biến chuyển động và đặc trưng nhịp điệu của thao tác chạm, cuộn, và dữ liệu chỉ phục vụ mục đích nghiên cứu. Người tham gia phải tích chọn ô đồng ý thì nút bắt đầu thu thập mới được kích hoạt, qua đó bảo đảm yêu cầu về đồng thuận có hiểu biết trong nghiên cứu trên người.
+Như thể hiện trong Hình~\ref{fig:dangky}, màn hình đăng ký còn hiển thị một bản thông báo đồng thuận, nêu rõ ứng dụng chỉ thu dữ liệu cảm biến chuyển động và đặc trưng nhịp điệu của thao tác chạm, cuộn và dữ liệu chỉ phục vụ mục đích nghiên cứu. Người tham gia phải tích chọn ô đồng ý thì nút bắt đầu thu thập mới được kích hoạt, qua đó bảo đảm yêu cầu về đồng thuận có hiểu biết trong nghiên cứu trên người.
 
 Khi hoàn tất, ứng dụng sinh một định danh \texttt{user\_id} duy nhất theo quy ước tiền tố \texttt{user\_} kèm Unix timestamp tại thời điểm đăng ký. Việc dùng mốc thời gian mili-giây đảm bảo không xảy ra xung đột định danh giữa các người tham gia, kể cả khi thu thập ở những thời điểm và trên những thiết bị khác nhau. Toàn bộ thông tin được lưu vào tệp \texttt{metadata.csv} theo định dạng hai cột là trường và giá trị, đặt trong thư mục riêng mang tên \texttt{user\_id} của người tham gia, làm cơ sở định danh cho toàn bộ dữ liệu cảm biến và tương tác thu được ở các bước sau.
 
 \subsection{Màn hình thu cảm biến quán tính}
 
-Màn hình thu cảm biến (\texttt{SensorCollectionActivity}) là thành phần trung tâm của ứng dụng, chịu trách nhiệm ghi nhận tín hiệu từ ba cảm biến quán tính là gia tốc kế, con quay hồi chuyển và cảm biến từ trường thông qua API \texttt{SensorManager} ở chế độ \texttt{SENSOR\_DELAY\_GAME}, tương ứng tần số lấy mẫu xấp xỉ 50 Hz và dao động tùy thiết bị. Người tham gia lần lượt thực hiện ba hoạt động đi bộ, đứng và ngồi với thời lượng mục tiêu mặc định 360 giây cho mỗi hoạt động, có thể điều chỉnh theo bước 30 giây trong khoảng từ 30 đến 1800 giây ngay trên giao diện.
+Màn hình thu cảm biến là thành phần trung tâm của ứng dụng, chịu trách nhiệm ghi nhận tín hiệu từ 3 cảm biến quán tính là gia tốc kế, con quay hồi chuyển và cảm biến từ trường với tần số lấy mẫu xấp xỉ 50 Hz và dao động tùy thiết bị. Người tham gia lần lượt thực hiện 3 hoạt động đi bộ, đứng và ngồi với thời lượng mục tiêu mặc định 360 giây cho mỗi hoạt động, có thể điều chỉnh tăng hoặc giảm 30 giây trong khoảng từ 30 đến 1800 giây ngay trên giao diện.
 
 Giao diện cung cấp phản hồi trực quan theo ba trạng thái của một phiên thu. Hình~\ref{fig:thucb} minh họa lần lượt trạng thái chưa thu, đang thu và đã hoàn tất.
 
@@ -106,32 +106,32 @@ Giao diện cung cấp phản hồi trực quan theo ba trạng thái của mộ
         \caption{Đã hoàn tất}
         \label{fig:thucb_c}
     \end{subfigure}
-    \caption{Ba trạng thái của màn hình thu cảm biến: trước khi thu, trong khi thu và sau khi hoàn tất cả ba hoạt động}
+    \caption{Ba trạng thái của màn hình thu cảm biến}
     \label{fig:thucb}
 \end{figure}
 
-Ở trạng thái chưa thu (Hình~\ref{fig:thucb_a}), mỗi hoạt động hiển thị tiến độ 0\% cùng mốc thời lượng mục tiêu, và giá trị cảm biến thời gian thực ở mức 0. Khi một hoạt động được kích hoạt (Hình~\ref{fig:thucb_b}), ứng dụng hiển thị nhãn hoạt động đang thu, đồng hồ đếm thời gian, dải biểu đồ tín hiệu cập nhật liên tục và phần trăm tiến độ; một dòng nhắc nhở người dùng cầm máy tự nhiên thay vì giữ cố định nhằm thu được hành vi thực tế. Khi cả ba hoạt động đạt mục tiêu (Hình~\ref{fig:thucb_c}), tổng tiến độ đạt 100\% và ứng dụng cho phép chuyển sang màn hình biểu mẫu tương tác. Ô hiển thị giá trị thời gian thực chỉ trình bày gia tốc kế và con quay hồi chuyển cho gọn giao diện, song tín hiệu từ cảm biến từ trường vẫn được ghi nhận đầy đủ để tạo thành bộ dữ liệu chín kênh.
+Ở trạng thái chưa thu (Hình~\ref{fig:thucb_a}), mỗi hoạt động hiển thị tiến độ 0\% cùng mốc thời lượng mục tiêu, và giá trị cảm biến thời gian thực ở mức 0. Khi một hoạt động được kích hoạt (Hình~\ref{fig:thucb_b}), ứng dụng hiển thị nhãn hoạt động đang thu, đồng hồ đếm thời gian, dải biểu đồ tín hiệu cập nhật liên tục và phần trăm tiến độ; một dòng nhắc nhở người dùng cầm máy tự nhiên thay vì giữ cố định nhằm thu được hành vi thực tế. Khi cả ba hoạt động đạt mục tiêu (Hình~\ref{fig:thucb_c}), tổng tiến độ đạt 100\% và ứng dụng cho phép chuyển sang màn hình biểu mẫu tương tác. Ô hiển thị giá trị thời gian thực chỉ trình bày gia tốc kế và con quay hồi chuyển cho gọn giao diện, song tín hiệu từ cảm biến từ trường vẫn được ghi nhận đầy đủ để tạo thành bộ dữ liệu 9 kênh.
 
-Để việc ghi nhận không bị gián đoạn khi người dùng chuyển ứng dụng hoặc tắt màn hình, quá trình thu được duy trì bởi một dịch vụ nền \texttt{SensorForegroundService} kiểu \texttt{START\_STICKY}. Mỗi lần thu của một hoạt động được lưu thành một tệp riêng theo quy ước \texttt{\{hoạt\_động\}\_att\{N\}.csv}, trong đó $N$ là số thứ tự lần thu tăng dần trong cùng một phiên; cơ chế này cho phép thu lại một hoạt động nhiều lần và đặt lại khi cần mà không ảnh hưởng đến dữ liệu của các hoạt động khác.
+Để việc ghi nhận không bị gián đoạn khi người dùng chuyển ứng dụng hoặc tắt màn hình, quá trình thu được duy trì ở chế độ chạy nền. Mỗi lần thu của một hoạt động được lưu thành một tệp riêng theo quy ước \texttt{\{hoạt\_động\}\_att\{N\}.csv}, trong đó $N$ là số thứ tự lần thu tăng dần trong cùng một phiên; cơ chế này cho phép thu lại một hoạt động nhiều lần và đặt lại khi cần mà không ảnh hưởng đến dữ liệu của các hoạt động khác.
 
 \subsection{Màn hình biểu mẫu tương tác}
 
-Sau khi hoàn thành thu cảm biến, người tham gia điền biểu mẫu tương tác (\texttt{FormActivity}) được thiết kế gồm hai phần nhằm thu đồng thời hai loại hành vi tương tác màn hình. Phần một gồm 14 câu hỏi lựa chọn để thu động học chạm (tap dynamics); phần hai gồm 5 danh sách chọn nhiều kết hợp thao tác cuộn để thu động học cuộn (scroll dynamics). Hình~\ref{fig:form} minh họa phần đầu của biểu mẫu.
+Sau khi hoàn thành thu cảm biến, người tham gia điền biểu mẫu tương tác được thiết kế gồm hai phần nhằm thu đồng thời hai loại hành vi tương tác màn hình. Phần một gồm 14 câu hỏi lựa chọn để thu động học chạm (tap dynamics); phần hai gồm 5 danh sách chọn nhiều kết hợp thao tác cuộn để thu động học cuộn (scroll dynamics). Hình~\ref{fig:form} minh họa phần đầu của biểu mẫu.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.28\textwidth,height=0.42\textheight,keepaspectratio]{Hinh_ve/Collectdata/screen_form.jpg}
-    \caption{Giao diện màn hình biểu mẫu tương tác, phần câu hỏi lựa chọn}
+    \caption{Giao diện màn hình biểu mẫu}
     \label{fig:form}
 \end{figure}
 
 Các câu hỏi được thiết kế gần gũi với thói quen sinh hoạt thường ngày, như thể hiện trong Hình~\ref{fig:form}, nhằm khuyến khích người tham gia thao tác tự nhiên. Điểm cần lưu ý là nội dung câu trả lời không phải là đối tượng quan tâm của đề tài; thay vào đó, ứng dụng ghi lại các đặc trưng hành vi của thao tác. Với mỗi lần chạm, ứng dụng ghi nhận các sự kiện chạm xuống và nhấc tay cùng tọa độ, dấu thời gian và thời gian giữ; với thao tác cuộn, ứng dụng ghi nhận quỹ đạo và vận tốc cuộn. Cách thu thông qua các tác vụ chuẩn hóa như vậy bảo đảm tính nhất quán giữa các người tham gia, đồng thời không cần đến nội dung văn bản người dùng nhập, phù hợp với cam kết về quyền riêng tư đã nêu ở màn hình đăng ký.
 
-Mỗi phiên cho phép điền biểu mẫu tối đa hai lượt nhằm tăng khối lượng dữ liệu tương tác. Hai loại sự kiện được lưu thành hai tệp riêng theo quy ước \texttt{tap\_r\{N\}.csv} và \texttt{scroll\_r\{N\}.csv}, trong đó $N$ là số thứ tự lượt điền trong phiên.
+Mỗi phiên cho phép điền biểu mẫu tối đa 2 lượt nhằm tăng khối lượng dữ liệu tương tác, 2 loại sự kiện được lưu thành 2 tệp riêng theo quy ước \texttt{tap\_r\{N\}.csv} và \texttt{scroll\_r\{N\}.csv}, trong đó $N$ là số thứ tự lượt điền trong phiên.
 
 \subsection{Màn hình xuất dữ liệu và cấu trúc dữ liệu đầu ra}
 
-Sau khi hoàn thành thu cảm biến và biểu mẫu, ứng dụng hiển thị màn hình tổng kết phiên thu (\texttt{UploadActivity}), như minh họa trong Hình~\ref{fig:xuatdulieu}. Màn hình này hiển thị định danh \texttt{user\_id}, phiên hiện tại và bảng thống kê dữ liệu đã thu được, gồm số tệp CSV tín hiệu quán tính cùng số mẫu sự kiện chạm và cuộn, kèm dung lượng ước tính của phiên.
+Sau khi hoàn thành thu cảm biến và biểu mẫu, ứng dụng hiển thị màn hình tổng kết phiên thu, như minh họa trong Hình~\ref{fig:xuatdulieu}. Màn hình này hiển thị định danh \texttt{user\_id}, phiên hiện tại và bảng thống kê dữ liệu đã thu được, gồm số tệp CSV tín hiệu quán tính cùng số mẫu sự kiện chạm và cuộn, kèm dung lượng ước tính của phiên.
 
 \begin{figure}[H]
     \centering
@@ -147,11 +147,11 @@ Toàn bộ dữ liệu của một người tham gia được tổ chức theo c
 \section{Tiền xử lý dữ liệu}
 \label{sec:tienxuly}
 
-Dữ liệu cảm biến thô thu được từ ứng dụng không thể đưa trực tiếp vào mô hình mà cần qua một quy trình tiền xử lý nhằm loại bỏ dữ liệu kém chất lượng, phân đoạn thành các đơn vị đầu vào có kích thước cố định và chuẩn hóa để giảm ảnh hưởng của khác biệt phần cứng. Phần này mô tả quy trình tiền xử lý dữ liệu quán tính chín kênh, gồm gia tốc kế, con quay hồi chuyển và cảm biến từ trường theo ba trục.
+Dữ liệu cảm biến thô thu được từ ứng dụng không thể đưa trực tiếp vào mô hình mà cần qua một quy trình tiền xử lý nhằm loại bỏ dữ liệu kém chất lượng, phân đoạn thành các đơn vị đầu vào có kích thước cố định và chuẩn hóa để giảm ảnh hưởng của khác biệt phần cứng. Phần này mô tả quy trình tiền xử lý dữ liệu quán tính 9 kênh gồm gia tốc kế, con quay hồi chuyển và cảm biến từ trường theo 3 trục.
 
 \subsection{Kiểm tra chất lượng và phân đoạn tín hiệu}
 
-Mỗi tệp tín hiệu được kiểm tra tính liên tục theo dấu thời gian. Do tần số lấy mẫu thực tế dao động giữa các thiết bị, một số mẫu có thể bị mất hoặc trễ; những vị trí có khoảng trống thời gian vượt quá ngưỡng tương ứng năm chu kỳ lấy mẫu được xem là điểm gián đoạn và chuỗi tín hiệu được tách thành các đoạn liên tục tại đó. Các đoạn ngắn hơn độ dài một cửa sổ sẽ bị loại bỏ, và thời lượng hợp lệ của mỗi hoạt động chỉ được tính trên phần tín hiệu liên tục. Quy trình kiểm tra còn rà soát những phiên có thống kê bất thường so với phần còn lại của cùng người dùng dựa trên độ lệch tuyệt đối trung vị, nhằm phát hiện và xử lý sớm các phiên thu lỗi trước khi đưa vào huấn luyện.
+Mỗi tệp tín hiệu được kiểm tra tính liên tục theo dấu thời gian. Do tần số lấy mẫu thực tế dao động giữa các thiết bị, một số mẫu có thể bị mất hoặc trễ; những vị trí có khoảng trống thời gian vượt quá ngưỡng tương ứng 5 chu kỳ lấy mẫu được xem là điểm gián đoạn và chuỗi tín hiệu được tách thành các đoạn liên tục tại đó. Các đoạn ngắn hơn độ dài một cửa sổ sẽ bị loại bỏ và thời lượng hợp lệ của mỗi hoạt động chỉ được tính trên phần tín hiệu liên tục.
 
 \subsection{Phân cửa sổ và chuẩn hóa}
 
