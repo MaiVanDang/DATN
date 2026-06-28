@@ -144,7 +144,6 @@ def evaluate_variant(variant: dict, all_users: list) -> dict:
             idx = rng.choice(len(imp_pool), MAX_IMP_EMB, replace=False)
             imp_pool = imp_pool[idx]
 
-        # Train RF
         owner_emb = np.concatenate([owner_cache[s] for s in enroll_keys], axis=0)
         X_train   = np.concatenate([owner_emb, imp_pool], axis=0)
         y_train   = np.array([1]*len(owner_emb) + [0]*len(imp_pool))
@@ -156,7 +155,6 @@ def evaluate_variant(variant: dict, all_users: list) -> dict:
         )
         rf.fit(X_train, y_train)
 
-        # Collect scores
         scores, labels = [], []
 
         for s in test_keys:
@@ -213,12 +211,10 @@ def main():
         print(f"  > {r['name']:<23} {auc_s:>6} {auc_d:>6} {eer_s:>6} {eer_d:>6} "
               f"{r['model_size_mb']:>5} {r['latency_ms']:>6}\n")
 
-    # Lưu JSON
     out = Path(__file__).parent / "evaluation_results.json"
     with open(out, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
 
-    # Tóm tắt
     print("=" * 65)
     valid = [r for r in results if r["eer_mean"] is not None]
     if valid:

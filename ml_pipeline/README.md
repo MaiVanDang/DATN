@@ -22,22 +22,19 @@ ml_pipeline/
 │   ├── X_walking.npy  / y_*    Cửa sổ cấu hình WALKING (chỉ đi bộ)
 │   └── *_gestures.csv, touch_session_features.csv   Đặc trưng touch 48-D
 │
-├── emb_out/                    Embedding xuất ra (.npz) để phân tích hàm chấm điểm
 ├── plots/                      Biểu đồ minh họa cho báo cáo
 ├── artifacts/                  Checkpoint mô hình (cnn / convlstm / convlstm_bi)
 │
 ├── step1_quality_check.py      Kiểm tra chất lượng & phát hiện phiên bất thường
 ├── step2_preprocess.py         Tiền xử lý quán tính + trích đặc trưng touch
-├── touch_features.py           Định nghĩa & dựng vector đặc trưng touch (48-D)
-├── backbone_train.py           Huấn luyện backbone học embedding (chạy trên Colab)
-├── export_embeddings.py        Xuất embedding 3 backbone × 2 ngữ cảnh (chạy trên Colab)
 ├── dataset_statistics.py       Thống kê số cửa sổ / người dùng
+├── report_dataset_stats.py     Thống kê bổ sung phục vụ báo cáo
 ├── ve_bieu_do.py               Sinh toàn bộ biểu đồ minh họa dữ liệu
 ├── export/
 │   ├── export_tflite.py        Export Keras/checkpoint → TFLite (hợp nhất 3 kiến trúc)
 │   └── export_tflite_cnn.py    Export riêng backbone CNN → TFLite
-└── Active_Auth_Training.ipynb  Notebook Colab: huấn luyện đầy đủ (chứa models/dataset/config)
-    Active_Auth_RunAll_Colab.ipynb   Notebook Colab: chạy toàn bộ pipeline
+├── Active_Auth_Train_Deploy.ipynb     Notebook Colab: huấn luyện backbone + xuất gói triển khai (TFLite, export_)
+└── Active_Auth_Eval_Benchmark.ipynb   Notebook Colab: chạy đầy đủ để đánh giá/kiểm chứng (so sánh hàm chấm điểm → Bảng 5.5, OOD)
 ```
 
 ## Thông số tiền xử lý chính
@@ -72,14 +69,12 @@ python ve_bieu_do.py --data_dir ./data --proc_dir ./processed --out ./plots
 
 ### Chạy trên Colab (cần PyTorch + các module `models.py`, `dataset.py`, `config.py`)
 
-Các script `backbone_train.py` và `export_embeddings.py` phụ thuộc vào `models`,
-`dataset`, `config` — các module này nằm trong notebook Colab
-(`Active_Auth_Training.ipynb`). Huấn luyện và xuất embedding được thực hiện trên Colab:
+Toàn bộ pipeline huấn luyện và đánh giá nằm trong 2 notebook Colab. Các module
+`models`, `dataset`, `config`, `backbone_train`, … được notebook tự sinh
+(`%%writefile`) khi chạy, nên không cần file `.py` rời:
 
-```bash
-python backbone_train.py        # huấn luyện backbone -> artifacts/<arch>/
-python export_embeddings.py --data_dir processed --root .   # -> emb_out/*.npz
-```
+- `Active_Auth_Train_Deploy.ipynb` — huấn luyện backbone (`artifacts/<arch>/`) + xuất gói triển khai (TFLite, `export_`).
+- `Active_Auth_Eval_Benchmark.ipynb` — chạy đầy đủ để đánh giá/kiểm chứng (so sánh hàm chấm điểm → Bảng 5.5, OOD).
 
 ### Xuất TFLite cho Android
 
