@@ -3,21 +3,9 @@ package com.datn.authenticator.inference
 import android.util.Log
 
 /**
- * ThresholdCalibrator — hiệu chuẩn NGƯỠNG THEO TỪNG OWNER lúc enroll.
- *
- * Đặt ngưỡng GẦN phân bố điểm của người lạ (impostor pool), chỉ nhích lên phía
- * điểm "đúng chủ" một phần [LENIENCY]. Lý do: trên thiết bị không có phiên
- * genuine "sống" lúc enroll, ta chỉ có 20 anchor — vốn SẠCH hơn hẳn cửa sổ lúc
- * dùng thật (nhiễu, đa tư thế). Nếu đặt ngưỡng tại mức genuine sạch (điểm EER
- * của dữ liệu enroll) thì ngưỡng vống cao → owner bị từ chối liên tục. Vì vậy
- * ngưỡng được neo theo impostor (đại diện đúng) cộng một biên hướng về genuine.
- *
- *   thr = impMedian + LENIENCY · (genMedian − impMedian),  kẹp [FLOOR, CEIL]
- *
- * Trong đó:
- *   • genuine  : leave-one-out trên anchor (mỗi anchor chấm với phần còn lại).
- *   • impostor : pool người lạ đóng gói sẵn, chấm với toàn bộ anchor.
- *   • cả hai GỘP theo nhóm [AGG_WINDOW] (khớp EWMA lúc vận hành) rồi lấy trung vị.
+ * Hiệu chuẩn ngưỡng quyết định riêng cho từng owner lúc enroll: neo theo trung vị
+ * điểm của pool người lạ, nhích về phía genuine một phần [LENIENCY], kẹp [FLOOR, CEIL]:
+ *   thr = impMedian + LENIENCY · (genMedian − impMedian).
  */
 object ThresholdCalibrator {
     private const val TAG = "ThresholdCalibrator"

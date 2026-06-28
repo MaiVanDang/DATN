@@ -27,9 +27,7 @@ from sklearn.metrics import roc_auc_score, roc_curve
 from touch_subwindow import touch_subwindows, all_sessions, TOUCH_SUBWIN_DIM as TOUCH_DIM
 
 
-# ═══════════════════════════════════════════════════════════════════
 # Artifacts: pool quán tính (z-norm) + pool touch + scaler touch
-# ═══════════════════════════════════════════════════════════════════
 
 class Artifacts:
     def __init__(self, pool_inertial, pool_touch_scaled, touch_mean, touch_scale):
@@ -81,9 +79,7 @@ def load_artifacts(export_dir: Path) -> Artifacts:
     return Artifacts(pool_i.astype(np.float32), pool_t, mean, scale)
 
 
-# ═══════════════════════════════════════════════════════════════════
 # Data loading
-# ═══════════════════════════════════════════════════════════════════
 
 _FILE_BY_MODE = {
     'walking': ('X_walking.npy', 'y_walking.npy'),
@@ -141,33 +137,14 @@ def extract_embeddings(encoder: torch.nn.Module, windows: np.ndarray) -> np.ndar
         return encoder(torch.from_numpy(windows)).numpy()
 
 
-# ═══════════════════════════════════════════════════════════════════
 # Quán tính: cos_znorm (đường quyết định chính)
-# ═══════════════════════════════════════════════════════════════════
-
 SCORE_SCALE = 3.0
 SCORE_BIAS  = 2.0
 
-# ─────────────────────────────────────────────────────────────────
-# NGƯỠNG CỐ ĐỊNH — calib MỘT LẦN tại điểm EER trên tập đánh giá.
-# Giá trị 0.23 lấy từ điểm cân bằng FAR≈FRR trên dữ liệu đánh giá
-# (chủ máy đậu hết, ~5% người lạ lọt). Cố định cho MỌI người dùng,
-# KHÔNG phụ thuộc số phiên enroll — giống cách FaceID/vân tay calib sẵn.
-# Muốn chặt hơn (ưu tiên chặn người lạ) → tăng; muốn dễ nhận chủ máy → giảm.
-# ─────────────────────────────────────────────────────────────────
+# Ngưỡng cố định: calib một lần tại điểm EER (FAR≈FRR) trên tập đánh giá; dùng fallback khi không có ngưỡng per-owner.
 FIXED_THRESHOLD = 0.23
 
-# ─────────────────────────────────────────────────────────────────
-# NGƯỠNG THEO TỪNG OWNER (per-owner calibration).
-# Thay vì một hằng số chung, ngưỡng được hiệu chuẩn từ PHÂN BỐ điểm
-# genuine của chính owner trên phiên val (tách rời anchor → không rò rỉ):
-#       thr = mean_genuine − K_STD · std_genuine,  kẹp trong [FLOOR, CEIL].
-# Lý do: mỗi owner có độ biến thiên hành vi khác nhau; owner "linh hoạt"
-# cần ngưỡng thấp hơn để không bị từ chối nhầm, owner "ổn định" có thể
-# đặt ngưỡng cao hơn. Người lạ sau z-norm cohort có điểm ≈0 nên việc hạ
-# ngưỡng cho owner gần như không ảnh hưởng khả năng chặn impostor.
-# FALLBACK về FIXED_THRESHOLD khi không có phiên val để ước lượng.
-# ─────────────────────────────────────────────────────────────────
+# Ngưỡng theo từng owner: hiệu chuẩn từ phân bố điểm genuine của owner lúc enroll (thr = mean − K_STD·std, kẹp [FLOOR, CEIL]); fallback về FIXED_THRESHOLD.
 THR_K_STD      = 1.5   # số độ lệch chuẩn đặt ngưỡng dưới trung bình genuine (khi thiếu impostor)
 THR_FLOOR      = 0.02  # sàn an toàn — không cho ngưỡng tụt quá thấp
 THR_CEIL       = 0.80  # trần — không cho ngưỡng cao quá gây từ chối owner
@@ -232,9 +209,7 @@ def score_inertial(embeds, anchors, cohort_mean, cohort_std):
     return sigmoid(SCORE_SCALE * (z - SCORE_BIAS))
 
 
-# ═══════════════════════════════════════════════════════════════════
 # Cohort / impostor pools (loại owner — chống rò rỉ)
-# ═══════════════════════════════════════════════════════════════════
 
 def _build_inertial_pool(owner_id, impostor_dir, encoder, artifacts, mode, seed=42):
     embeds = []
@@ -275,9 +250,7 @@ def _build_touch_pool(owner_id, data_dir, artifacts):
     return artifacts.transform_touch(arr).astype(np.float32)
 
 
-# ═══════════════════════════════════════════════════════════════════
 # Enrollment
-# ═══════════════════════════════════════════════════════════════════
 
 class Enrollment:
     def __init__(self, owner_id, enroll_sessions, anchors, cohort_mean, cohort_std,
@@ -433,9 +406,7 @@ def _tune(owner_id, val_key, data_dir, impostor_dir, encoder, anchors,
     return FIXED_THRESHOLD, best_w, FIXED_THRESHOLD
 
 
-# ═══════════════════════════════════════════════════════════════════
 # Verification — trả CẢ 3 điểm + 2 kết luận
-# ═══════════════════════════════════════════════════════════════════
 
 def verify_session(enrollment: Enrollment, test_user_id, test_session_id,
                    data_dir, encoder, fusion_w_override=None) -> dict:

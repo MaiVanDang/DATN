@@ -12,16 +12,9 @@ import android.util.Log
 import kotlin.math.abs
 
 /**
- * Phát hiện cử chỉ lắc và TÁCH THÀNH DÃY CHỮ SỐ.
- *
- * Cơ chế: mỗi đỉnh gia tốc vượt ngưỡng = 1 lần lắc. Một "cụm" (burst) các lần
- * lắc liên tiếp, khi người dùng DỪNG > [DIGIT_GAP_MS], được chốt thành một
- * chữ số = số lần lắc trong cụm (kẹp về 1..9). Lắc tiếp → chữ số kế tiếp.
- *
- *   lắc lắc lắc | (dừng) | lắc | (dừng) | lắc lắc lắc lắc   →  [3, 1, 4]
- *
- * Callback [onDigitsUpdated] báo dãy hiện tại mỗi khi chốt 1 chữ số; [onShake]
- * báo số lần lắc trong cụm đang gõ để UI hiển thị realtime.
+ * Phát hiện cử chỉ lắc và tách thành dãy chữ số: mỗi đỉnh gia tốc vượt ngưỡng là một
+ * lần lắc; một cụm lắc liên tiếp khi dừng quá [DIGIT_GAP_MS] được chốt thành một chữ
+ * số (số lần lắc, kẹp 1..9). [onDigitsUpdated]/[onShake] cập nhật UI theo thời gian thực.
  */
 class ShakeDetector(
     private val context: Context,

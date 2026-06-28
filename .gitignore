@@ -10,3 +10,6 @@ build/
 *.synctex(busy)
 *.toc
 *.out
+*.zip
+docs/
+*.pdf

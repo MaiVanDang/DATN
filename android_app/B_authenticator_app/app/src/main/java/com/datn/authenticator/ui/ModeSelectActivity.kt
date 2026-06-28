@@ -14,12 +14,8 @@ import com.datn.authenticator.util.ContextMode
 import com.google.android.material.card.MaterialCardView
 
 /**
- * Màn chọn mode train (Walking vs All-action).
- *
- * - Lần đầu mở app: hiện màn này, user chọn mode → vào OwnerEnrollment.
- * - Đã chọn mode + đã enroll: skip thẳng theo flow cũ (Touch/Fallback/Quiz).
- * - User muốn đổi mode sau khi enroll: từ OwnerEnrollment bấm "Đổi mode" →
- *   ContextMode.clear() + OwnerProfile.clear() → quay lại đây.
+ * Màn chọn mode train (Walking vs All-action): lần đầu mở app thì chọn mode rồi vào
+ * enroll; đổi mode sau khi đã enroll sẽ xoá ContextMode + OwnerProfile và enroll lại.
  */
 class ModeSelectActivity : AppCompatActivity() {
 

@@ -9,19 +9,9 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 
 /**
- * Lưu "mật khẩu lắc" dạng DÃY CHỮ SỐ (mỗi chữ số 1..9, độ dài 4..8) — thay
- * cho phiên bản cũ chỉ lưu một số đếm lắc duy nhất (entropy ~ vài chục).
- *
- * Mỗi chữ số = số lần lắc trong một "cụm" (burst); các chữ số cách nhau bằng
- * một quãng dừng (xem [ShakeDetector]). Ví dụ dãy [3,1,4]: lắc 3 lần → dừng →
- * 1 lần → dừng → 4 lần.
- *
- * Bảo mật: KHÔNG lưu dãy số thô. Lưu salt ngẫu nhiên + SHA-256(salt || dãy).
- * Khi verify, băm lại và so khớp tuyệt đối (burst-count ổn định hơn tổng số
- * lắc nên không cần tolerance — vừa chính xác vừa an toàn hơn).
- *
- * Entropy ≈ 9^L (L=độ dài): L=4 → 6561 tổ hợp, L=6 → ~531k — so với ~20 của
- * bản cũ. Vẫn nên giữ tuỳ chọn PIN hệ điều hành làm fallback cuối.
+ * Lưu "mật khẩu lắc" dạng dãy chữ số (mỗi chữ số 1..9, độ dài 4..8): mỗi chữ số là
+ * số lần lắc trong một cụm, cách nhau bằng quãng dừng (xem [ShakeDetector]).
+ * Không lưu dãy thô — lưu salt ngẫu nhiên + SHA-256(salt || dãy), verify bằng băm lại.
  */
 class PatternStorage(context: Context) {
 

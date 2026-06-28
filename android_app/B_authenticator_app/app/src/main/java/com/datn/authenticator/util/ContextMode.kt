@@ -4,22 +4,10 @@ import android.content.Context
 import android.util.Log
 
 /**
- * Bối cảnh huấn luyện model — tương ứng với 2 checkpoint đã train sẵn.
- *
- *  - [WALKING]  Train chỉ trên dữ liệu đi bộ (chuyên dụng — EER thấp nhất khi
- *               người dùng chủ yếu cầm điện thoại lúc đi bộ).
- *  - [ALL]      Train trên tất cả hoạt động (đi, ngồi, đứng, leo cầu thang…).
- *               Linh hoạt hơn nhưng score có thể nhiễu hơn ở từng tư thế cụ thể.
- *
- * Mỗi mode tương ứng 1 sub-folder trong `assets/`:
- *   assets/walking/{backbone.tflite, scaler_params.json, …}
- *   assets/all/{backbone.tflite, scaler_params.json, …}
- *
- * Lựa chọn được lưu vào SharedPreferences và đọc lại sau khi app khởi động lại.
- *
- * QUAN TRỌNG: anchor / RF lưu trong [com.datn.authenticator.inference.OwnerProfile]
- * gắn chặt với embedding của 1 model cụ thể. Khi user đổi mode, ta phải xoá
- * `OwnerProfile` và bắt enroll lại — nếu không, cosine similarity sẽ vô nghĩa.
+ * Bối cảnh huấn luyện model, tương ứng 2 checkpoint train sẵn ([WALKING] chỉ đi bộ,
+ * [ALL] mọi hoạt động); mỗi mode dùng một sub-folder trong `assets/` và được lưu vào
+ * SharedPreferences. Đổi mode phải xoá [com.datn.authenticator.inference.OwnerProfile]
+ * và enroll lại vì anchor gắn với embedding của một model cụ thể.
  */
 enum class ContextMode(val key: String, val assetFolder: String) {
     WALKING("walking", "walking"),
