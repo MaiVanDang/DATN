@@ -68,7 +68,7 @@ def load_artifacts(export_dir: Path) -> Artifacts:
                 sc = json.load(f)
             _mean = np.asarray(sc["mean"], np.float64)
             _scale = np.asarray(sc["scale"], np.float64)
-            # CHỈ bật touch nếu MỌI chiều khớp TOUCH_DIM (48). Lệch → tắt touch an toàn.
+            # CHỈ bật touch nếu MỌI chiều khớp TOUCH_DIM (33). Lệch → tắt touch an toàn.
             if (_pool_t.ndim == 2 and _pool_t.shape[1] == TOUCH_DIM
                     and len(_mean) == TOUCH_DIM and len(_scale) == TOUCH_DIM):
                 pool_t, mean, scale = _pool_t, _mean, _scale

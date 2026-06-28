@@ -30,11 +30,11 @@ Vì hệ thống hướng tới suy luận trực tiếp trên thiết bị, quy
     \hline
     \textbf{Kiến trúc} & \textbf{Số tham số} & \textbf{Dung lượng (tệp checkpoint)} \\
     \hline
-    CNN 1D     & $\approx$ 77,6 nghìn  & $\approx$ 331 KB \\
+    CNN 1D     & $\approx$ 80,0 nghìn  & $\approx$ 323 KB \\
     \hline
-    CNN-LSTM   & $\approx$ 160,1 nghìn & $\approx$ 659 KB \\
+    CNN-LSTM   & $\approx$ 162,6 nghìn & $\approx$ 643 KB \\
     \hline
-    CNN-BiLSTM & $\approx$ 127,4 nghìn & $\approx$ 528 KB \\
+    CNN-BiLSTM & $\approx$ 129,8 nghìn & $\approx$ 516 KB \\
     \hline
     \end{tabular}
 \end{table}
@@ -43,7 +43,7 @@ Như thể hiện trong Bảng~\ref{tab:model_size}, CNN 1D là kiến trúc g�
 
 \subsection{Cơ sở lựa chọn độ phức tạp mô hình theo kích thước dữ liệu}
 
-Việc lựa chọn độ phức tạp của bộ mã hóa cần được đặt trong tương quan với quy mô dữ liệu huấn luyện, đặc biệt với mục tiêu nhận dạng tập mở. Bộ dữ liệu gồm 26 người tham gia, mỗi người 6 phiên; sau khi giữ riêng 5 danh tính cho đánh giá tập mở và loại một số ít hồ sơ thiếu dữ liệu, còn khoảng 19 danh tính được dùng để huấn luyện bộ mã hóa. Mặc dù số cửa sổ tín hiệu lên tới hàng chục nghìn, các cửa sổ này được trượt chồng lấn nên những cửa sổ trong cùng một phiên gần như trùng lặp về thông tin; do đó số mẫu thực sự độc lập nhỏ hơn nhiều con số cửa sổ thô và xấp xỉ số khối danh tính--phiên vào khoảng tích của 19 danh tính với 6 phiên, tức trên dưới một trăm khối. Đối với khả năng tổng quát hóa sang người lạ, yếu tố quyết định là độ đa dạng về danh tính và phiên hành vi, chứ không phải số lượng cửa sổ thô; và cả 2 đại lượng này đều ở mức hạn chế.
+Việc lựa chọn độ phức tạp của bộ mã hóa cần được đặt trong tương quan với quy mô dữ liệu huấn luyện, đặc biệt với mục tiêu nhận dạng tập mở. Bộ dữ liệu gồm 26 người tham gia, mỗi người 6 phiên; sau khi giữ riêng 5 danh tính cho đánh giá tập mở còn 21 danh tính được dùng để huấn luyện bộ mã hóa. Mặc dù số cửa sổ tín hiệu lên tới hàng chục nghìn, các cửa sổ này được trượt chồng lấn nên những cửa sổ trong cùng một phiên gần như trùng lặp về thông tin; do đó số mẫu thực sự độc lập nhỏ hơn nhiều con số cửa sổ thô và xấp xỉ số khối danh tính-phiên vào khoảng tích của 21 danh tính với 6 phiên, tức trên dưới một trăm khối. Đối với khả năng tổng quát hóa sang người lạ, yếu tố quyết định là độ đa dạng về danh tính và phiên hành vi. Tuy nhiên cả 2 đại lượng này đều ở mức hạn chế.
 
 Từ tương quan đó, một mô hình có dung lượng quá lớn so với lượng danh tính quan sát được sẽ có xu hướng khớp với chính tập danh tính đã thấy và tổng quát hóa kém cho người chưa biết. Vì vậy, thiết kế ưu tiên một bộ mã hóa gọn nhẹ thay vì các kiến trúc nhiều tham số. Định hướng này nhất quán với so sánh quy mô ở Bảng~\ref{tab:model_size}, trong đó CNN 1D chỉ dùng khoảng một nửa số tham số so với 2 biến thể hồi tiếp và được khẳng định bằng thực nghiệm ở Chương 5: ở kịch bản tập mở, CNN 1D cho tỉ lệ lỗi cân bằng thấp nhất, trong khi CNN-LSTM và CNN-BiLSTM tuy nhiều tham số hơn lại không cải thiện mà còn có dấu hiệu khớp với tập danh tính đã quan sát. Như vậy, độ phức tạp mô hình được lựa chọn tương xứng với kích thước dữ liệu hiện có.
 
@@ -58,7 +58,7 @@ Với mỗi nhóm, các đặc trưng thống kê được tính dưới dạng 
 
 \subsection{Phân loại bằng Random Forest}
 
-Vector đặc trưng 48 chiều của nhánh touch được phân loại bằng thuật toán Random Forest theo chiến lược owner-vs-pool: với mỗi chủ sở hữu, một bộ phân loại nhị phân được huấn luyện để phân biệt các mẫu của chủ sở hữu với một tập mẫu nền lấy từ những người dùng khác. Bộ phân loại sử dụng 200 cây quyết định, số đặc trưng xét tại mỗi nút lấy theo căn bậc 2 tổng số đặc trưng và trọng số lớp được cân bằng để xử lý chênh lệch giữa số mẫu của chủ sở hữu và tập nền. Điểm tin cậy của một phiên được lấy bằng trung bình xác suất dự đoán trên các cửa sổ con của phiên đó. Random Forest được lựa chọn cho nhánh touch thay vì mạng học sâu vì lượng dữ liệu tương tác nhỏ hơn nhiều so với dữ liệu quán tính và một mô hình đơn giản giúp hạn chế quá khớp trên lượng dữ liệu hạn chế này.
+Vector đặc trưng 33 chiều của nhánh touch được phân loại bằng thuật toán Random Forest theo chiến lược owner-vs-pool: với mỗi chủ sở hữu, một bộ phân loại nhị phân được huấn luyện để phân biệt các mẫu của chủ sở hữu với một tập mẫu nền lấy từ những người dùng khác. Bộ phân loại sử dụng 200 cây quyết định, số đặc trưng xét tại mỗi nút lấy theo căn bậc 2 tổng số đặc trưng và trọng số lớp được cân bằng để xử lý chênh lệch giữa số mẫu của chủ sở hữu và tập nền. Mỗi phiên sinh ra nhiều vector đặc trưng 33 chiều, mỗi vector tổng hợp từ một nhóm thao tác chạm và cuộn liên tiếp; điểm tin cậy của phiên được lấy bằng trung bình xác suất dự đoán trên các vector này. Random Forest được lựa chọn cho nhánh touch thay vì mạng học sâu vì lượng dữ liệu tương tác nhỏ hơn nhiều so với dữ liệu quán tính và một mô hình đơn giản giúp hạn chế quá khớp trên lượng dữ liệu hạn chế này.
 
 \section{Hàm quyết định và dung hợp}
 \label{sec:decision}
