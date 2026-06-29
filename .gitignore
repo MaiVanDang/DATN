@@ -13,3 +13,6 @@ build/
 *.zip
 docs/
 *.pdf
+data/
+processed/
+processed_data/
