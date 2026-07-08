@@ -61,7 +61,7 @@ def get_duration(df: pd.DataFrame, filename: str = "") -> float:
 
 
 def collect_inertial(session_dir: Path) -> dict[str, float]:
-    """Tổng thời lượng (giây) của 3 activity trong 1 session."""
+    """Tổng thời lượng (giây) của từng hoạt động trong 1 session."""
     result = {act: 0.0 for act in INERTIAL_TARGET_MIN}
     for act in INERTIAL_TARGET_MIN:
         for f in sorted(session_dir.glob(f"{act}_att*.csv")):

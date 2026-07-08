@@ -23,7 +23,7 @@ TOUCH_SUBWIN_DIM = 3 * 3 + 1 + len(_SCROLL_NUM) * 2 + 1   # = 33
 _raw_cache: dict = {}
 
 
-def _load_raw(user_dir: Path):
+def load_raw(user_dir: Path):
     key = str(user_dir)
     if key in _raw_cache:
         return _raw_cache[key]
@@ -48,13 +48,13 @@ def strip_user_prefix(prefixed: str, user_id: str) -> str:
 
 def all_sessions(user_dir: Path) -> set:
     """Tập session_id (chuỗi) xuất hiện trong tap_gestures.csv của user."""
-    tp, _ = _load_raw(user_dir)
+    tp, _ = load_raw(user_dir)
     if tp is None or "session_id" not in tp.columns:
         return set()
     return set(tp["session_id"].astype(str).unique())
 
 
-def _chunk_feats(tp_c, sc_c) -> np.ndarray:
+def chunk_feats(tp_c, sc_c) -> np.ndarray:
     f = []
     hold = tp_c["hold_ms"].values if len(tp_c) else np.array([0.0])
     disp = tp_c["displacement"].values if len(tp_c) else np.array([0.0])
@@ -74,7 +74,7 @@ def _chunk_feats(tp_c, sc_c) -> np.ndarray:
 
 def touch_subwindows(user_dir: Path, sessions) -> np.ndarray:
     """Trả về (n_subwindow, 33) cho các session chỉ định (session_id chưa tiền tố)."""
-    tp, sc = _load_raw(user_dir)
+    tp, sc = load_raw(user_dir)
     if tp is None:
         return np.zeros((0, TOUCH_SUBWIN_DIM))
     out = []
@@ -89,5 +89,5 @@ def touch_subwindows(user_dir: Path, sessions) -> np.ndarray:
             tc = t.iloc[i * TAP_CHUNK:(i + 1) * TAP_CHUNK]
             kc = k.iloc[i * SCR_CHUNK:(i + 1) * SCR_CHUNK] if len(k) else k
             if len(tc) >= MIN_TAP_IN_CHUNK:
-                out.append(_chunk_feats(tc, kc))
+                out.append(chunk_feats(tc, kc))
     return np.asarray(out, np.float64) if out else np.zeros((0, TOUCH_SUBWIN_DIM))

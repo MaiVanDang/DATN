@@ -48,7 +48,7 @@ print("    Keys:", list(sd.keys()))
 
 print("\n[2] Building Keras model ...")
 
-def _conv_block_2layer(inp):
+def conv_block_2layer(inp):
     """2 conv blocks dùng chung cho cả 3 model. Đầu ra: [batch, 50, 128]"""
     x = tf.keras.layers.Conv1D(64,  5, padding="same", use_bias=True, name="conv1")(inp)
     x = tf.keras.layers.BatchNormalization(name="bn1")(x)
@@ -61,7 +61,7 @@ def _conv_block_2layer(inp):
     return x
 
 inp = tf.keras.Input(shape=(200, 9), name="input")
-x   = _conv_block_2layer(inp)
+x   = conv_block_2layer(inp)
 
 if MODEL == "cnn":
     x = tf.keras.layers.Conv1D(128, 3, padding="same", use_bias=True, name="conv3")(x)
@@ -116,17 +116,17 @@ elif MODEL == "convlstm":
 
 elif MODEL == "convlstm_bi":
     bidir_layer = keras_model.get_layer("bilstm")
-    def _lstm_weights(ih_key, hh_key, bih_key, bhh_key):
+    def lstm_weights(ih_key, hh_key, bih_key, bhh_key):
         return [
             to_np(sd[ih_key]).T,
             to_np(sd[hh_key]).T,
             to_np(sd[bih_key]) + to_np(sd[bhh_key]),
         ]
-    fwd = _lstm_weights("encoder.lstm.weight_ih_l0",
+    fwd = lstm_weights("encoder.lstm.weight_ih_l0",
                         "encoder.lstm.weight_hh_l0",
                         "encoder.lstm.bias_ih_l0",
                         "encoder.lstm.bias_hh_l0")
-    bwd = _lstm_weights("encoder.lstm.weight_ih_l0_reverse",
+    bwd = lstm_weights("encoder.lstm.weight_ih_l0_reverse",
                         "encoder.lstm.weight_hh_l0_reverse",
                         "encoder.lstm.bias_ih_l0_reverse",
                         "encoder.lstm.bias_hh_l0_reverse")

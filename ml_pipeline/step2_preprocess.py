@@ -8,6 +8,7 @@ WINDOW_SIZE = 4 * HZ
 STRIDE      = 20
 MAX_GAP_SEC = 5 / HZ
 BURST_THR   = 150
+ACTIVITIES = ["walking", "sitting", "standing"]
 
 SENSOR_COLS = [
     "acc_x",  "acc_y",  "acc_z",
@@ -18,16 +19,14 @@ SENSOR_COLS = [
 DATA_DIR = Path(__file__).parent / "data"
 PROC_DIR = Path(__file__).parent / "processed"
 
-
-def _ts_info(df: pd.DataFrame):
+def ts_info(df: pd.DataFrame):
     """Trả về (tên cột timestamp, hệ số quy đổi sang giây)."""
     ts_col = "timestamp_ms" if "timestamp_ms" in df.columns else "timestamp_ns"
     to_sec = 1e3 if ts_col == "timestamp_ms" else 1e9
     return ts_col, to_sec
 
-
 def split_segments(df: pd.DataFrame) -> list[pd.DataFrame]:
-    ts_col, to_sec = _ts_info(df)
+    ts_col, to_sec = ts_info(df)
     df = df.sort_values(ts_col).reset_index(drop=True)
     diffs = df[ts_col].diff() / to_sec
     gap_idx = list(diffs[diffs > MAX_GAP_SEC].index)
@@ -39,12 +38,10 @@ def split_segments(df: pd.DataFrame) -> list[pd.DataFrame]:
             segs.append(seg)
     return segs
 
-
 def zscore_windows(X: np.ndarray, eps: float = 1e-8) -> np.ndarray:
     mean = X.mean(axis=1, keepdims=True)
     std  = X.std(axis=1, keepdims=True) + eps
     return (X - mean) / std
-
 
 def make_windows(df: pd.DataFrame, label: str):
     df = df.dropna(subset=SENSOR_COLS)
@@ -58,17 +55,7 @@ def make_windows(df: pd.DataFrame, label: str):
     X = zscore_windows(np.array(X_list, np.float64))
     return X, np.full(len(X), label)
 
-
-def pct5(arr):
-    if len(arr) < 2:
-        return np.nan, np.nan, np.nan
-    return float(np.percentile(arr, 25)), float(np.median(arr)), float(np.percentile(arr, 75))
-
-
-ACTIVITIES = ["walking", "sitting", "standing"]
-
-
-def _read_activity(sess_dir: Path, activity: str) -> pd.DataFrame | None:
+def read_activity(sess_dir: Path, activity: str) -> pd.DataFrame | None:
     dfs = []
     for f in sorted(sess_dir.glob(f"{activity}_att*.csv")):
         try:
@@ -77,14 +64,13 @@ def _read_activity(sess_dir: Path, activity: str) -> pd.DataFrame | None:
             print(f"    [W] {f.name}: {e}")
     return pd.concat(dfs, ignore_index=True) if dfs else None
 
-
 def process_inertial(sess_dir: Path, label: str):
     X_walk, y_walk = [], []
     X_all,  y_all  = [], []
     empty = np.empty((0, WINDOW_SIZE, len(SENSOR_COLS)), np.float64)
 
     for act in ACTIVITIES:
-        df = _read_activity(sess_dir, act)
+        df = read_activity(sess_dir, act)
         if df is None:
             continue
         X, y = make_windows(df, label)
@@ -99,7 +85,6 @@ def process_inertial(sess_dir: Path, label: str):
     Xi = np.concatenate(X_all)  if X_all  else empty
     yi = np.concatenate(y_all)  if y_all  else np.array([])
     return (Xw, yw), (Xi, yi)
-
 
 def process_tap(sess_dir: Path, session_id: str) -> pd.DataFrame:
     rows = []
@@ -134,8 +119,38 @@ def process_tap(sess_dir: Path, session_id: str) -> pd.DataFrame:
                 i += 1
     return pd.DataFrame(rows)
 
+def process_scroll(sess_dir: Path, session_id: str) -> pd.DataFrame:
+    gestures = []
+    for f in sorted(sess_dir.glob("scroll_r*.csv")):
+        try:
+            df = pd.read_csv(f).sort_values("timestamp_ms").reset_index(drop=True)
+        except Exception:
+            continue
+        for ptr in df["pointer_id"].unique():
+            sub = df[df["pointer_id"] == ptr].reset_index(drop=True)
+            in_g, buf = False, []
+            for _, row in sub.iterrows():
+                if row["phase"] == "DOWN":
+                    in_g, buf = True, [row]
+                elif in_g:
+                    buf.append(row)
+                    if row["phase"] == "UP":
+                        g   = pd.DataFrame(buf)
+                        dur = g["timestamp_ms"].iloc[-1] - g["timestamp_ms"].iloc[0]
+                        if len(g) >= 2 and 10 < dur < 5000:
+                            feat = gesture_features(g)
+                            if feat:
+                                feat["session_id"] = session_id
+                                gestures.append(feat)
+                        in_g, buf = False, []
+    if not gestures:
+        return pd.DataFrame()
+    cols = ["duration_ms", "disp_y", "straight", "traj",
+            "v_mean", "v_max", "v_start", "peak_ratio",
+            "v_last5", "mrl", "a_first5", "direction", "session_id"]
+    return pd.DataFrame(gestures)[cols]
 
-def _gesture_features(g: pd.DataFrame) -> dict | None:
+def gesture_features(g: pd.DataFrame) -> dict | None:
     pts = g[["timestamp_ms", "x", "y"]].values.astype(float)
     if len(pts) < 2:
         return None
@@ -181,39 +196,6 @@ def _gesture_features(g: pd.DataFrame) -> dict | None:
         "a_first5":    a_first5,
         "direction":   float(np.arctan2(y[-1] - y[0], x[-1] - x[0])),
     }
-
-
-def process_scroll(sess_dir: Path, session_id: str) -> pd.DataFrame:
-    gestures = []
-    for f in sorted(sess_dir.glob("scroll_r*.csv")):
-        try:
-            df = pd.read_csv(f).sort_values("timestamp_ms").reset_index(drop=True)
-        except Exception:
-            continue
-        for ptr in df["pointer_id"].unique():
-            sub = df[df["pointer_id"] == ptr].reset_index(drop=True)
-            in_g, buf = False, []
-            for _, row in sub.iterrows():
-                if row["phase"] == "DOWN":
-                    in_g, buf = True, [row]
-                elif in_g:
-                    buf.append(row)
-                    if row["phase"] == "UP":
-                        g   = pd.DataFrame(buf)
-                        dur = g["timestamp_ms"].iloc[-1] - g["timestamp_ms"].iloc[0]
-                        if len(g) >= 2 and 10 < dur < 5000:
-                            feat = _gesture_features(g)
-                            if feat:
-                                feat["session_id"] = session_id
-                                gestures.append(feat)
-                        in_g, buf = False, []
-    if not gestures:
-        return pd.DataFrame()
-    cols = ["duration_ms", "disp_y", "straight", "traj",
-            "v_mean", "v_max", "v_start", "peak_ratio",
-            "v_last5", "mrl", "a_first5", "direction", "session_id"]
-    return pd.DataFrame(gestures)[cols]
-
 
 def process_user(user_dir: Path):
     uid     = user_dir.name
@@ -267,7 +249,6 @@ def process_user(user_dir: Path):
         pd.concat(all_sc,  ignore_index=True).to_csv(out_dir / "scroll_gestures.csv", index=False)
 
     print(f"  -> walking={len(Xw_all)}  inertial={len(Xi_all)}  saved to processed/{uid}/")
-
 
 if __name__ == "__main__":
     if not DATA_DIR.is_dir():

@@ -117,7 +117,7 @@ def load_user_inertial(user_id: str, data_dir: Path, mode: str = 'walking') -> d
     return out
 
 
-def _layout(w: np.ndarray) -> np.ndarray:
+def layout(w: np.ndarray) -> np.ndarray:
     if w.ndim != 3:
         raise ValueError(f"Expected 3D, got {w.shape}")
     if w.shape[2] == 9:
@@ -127,12 +127,12 @@ def _layout(w: np.ndarray) -> np.ndarray:
     return w.astype(np.float32)
 
 
-def _zscore(w: np.ndarray, eps=1e-8) -> np.ndarray:
+def zscore(w: np.ndarray, eps=1e-8) -> np.ndarray:
     return (w - w.mean(2, keepdims=True)) / (w.std(2, keepdims=True) + eps)
 
 
 def extract_embeddings(encoder: torch.nn.Module, windows: np.ndarray) -> np.ndarray:
-    windows = _zscore(_layout(windows))
+    windows = zscore(layout(windows))
     with torch.no_grad():
         return encoder(torch.from_numpy(windows)).numpy()
 
@@ -151,7 +151,7 @@ THR_CEIL       = 0.80  # trần — không cho ngưỡng cao quá gây từ ch�
 THR_AGG_WINDOW = 5     # gộp ~5 cửa sổ trước khi hiệu chuẩn (khớp EWMA triển khai)
 
 
-def _aggregate_scores(scores, w, seed=0):
+def aggregate_scores(scores, w, seed=0):
     """Gộp điểm theo nhóm w cửa sổ rồi lấy trung bình.
 
     Lý do: ở mức CỬA SỔ, điểm genuine và impostor chồng lấn nặng; khả năng
@@ -178,21 +178,21 @@ def calibrate_owner_threshold(genuine_scores, impostor_scores=None,
                       để khớp mức gộp lúc quyết định; nếu thiếu impostor thì lùi
                       K_STD độ lệch chuẩn dưới trung bình genuine.
     """
-    g = _aggregate_scores(genuine_scores, THR_AGG_WINDOW, seed=1)
+    g = aggregate_scores(genuine_scores, THR_AGG_WINDOW, seed=1)
     if g.size < 2:
         return float(fallback)
     if impostor_scores is not None and np.size(impostor_scores) >= THR_AGG_WINDOW:
-        imp = _aggregate_scores(impostor_scores, THR_AGG_WINDOW, seed=2)
+        imp = aggregate_scores(impostor_scores, THR_AGG_WINDOW, seed=2)
         y = np.concatenate([np.ones(g.size), np.zeros(imp.size)])
         s = np.concatenate([g, imp])
-        thr = _eer_threshold(y, s)          # cân bằng FAR≈FRR cho owner này
+        thr = eer_threshold(y, s)          # cân bằng FAR≈FRR cho owner này
     else:
         thr = g.mean() - THR_K_STD * g.std()
     return float(np.clip(thr, THR_FLOOR, THR_CEIL))
 
 
-def _l2(M): return M / (np.linalg.norm(M, axis=-1, keepdims=True) + 1e-9)
-def mean_cosine(e, a): return (_l2(e) @ _l2(a).T).mean(1)
+def l2(M): return M / (np.linalg.norm(M, axis=-1, keepdims=True) + 1e-9)
+def mean_cosine(e, a): return (l2(e) @ l2(a).T).mean(1)
 def sigmoid(x): return 1.0 / (1.0 + np.exp(-x))
 
 
@@ -211,7 +211,7 @@ def score_inertial(embeds, anchors, cohort_mean, cohort_std):
 
 # Cohort / impostor pools (loại owner — chống rò rỉ)
 
-def _build_inertial_pool(owner_id, impostor_dir, encoder, artifacts, mode, seed=42):
+def build_inertial_pool(owner_id, impostor_dir, encoder, artifacts, mode, seed=42):
     embeds = []
     for ud in sorted(Path(impostor_dir).iterdir()):
         if not ud.is_dir() or ud.name == owner_id:
@@ -232,7 +232,7 @@ def _build_inertial_pool(owner_id, impostor_dir, encoder, artifacts, mode, seed=
     return arr.astype(np.float32)
 
 
-def _build_touch_pool(owner_id, data_dir, artifacts):
+def build_touch_pool(owner_id, data_dir, artifacts):
     """Pool người lạ = sub-window touch (33-D) của các user khác owner."""
     vectors = []
     for ud in sorted(Path(data_dir).iterdir()):
@@ -287,7 +287,7 @@ def enroll(owner_id, n_enroll_sessions, data_dir, encoder, artifacts,
     # ── Quán tính: anchor + cohort z-norm ──
     anchor_windows = np.concatenate([sessions[s] for s in anchor_keys], 0)
     anchors = extract_embeddings(encoder, anchor_windows)
-    cohort = _build_inertial_pool(owner_id, impostor_dir, encoder, artifacts, data_mode, seed)
+    cohort = build_inertial_pool(owner_id, impostor_dir, encoder, artifacts, data_mode, seed)
     cohort_mean, cohort_std = fit_cohort(anchors, cohort)
 
     # ── Touch: RF owner-vs-pool (sub-window 33-D), nếu có dữ liệu touch ──
@@ -297,7 +297,7 @@ def enroll(owner_id, n_enroll_sessions, data_dir, encoder, artifacts,
             ot_raw = touch_subwindows(data_dir / owner_id, set(anchor_keys))
             if len(ot_raw) >= 2:
                 ot = artifacts.transform_touch(ot_raw).astype(np.float32)
-                pool_t = _build_touch_pool(owner_id, impostor_dir, artifacts)
+                pool_t = build_touch_pool(owner_id, impostor_dir, artifacts)
                 if len(pool_t):
                     Xt = np.concatenate([ot, pool_t], 0)
                     yt = np.array([1] * len(ot) + [0] * len(pool_t))
@@ -310,7 +310,7 @@ def enroll(owner_id, n_enroll_sessions, data_dir, encoder, artifacts,
             rf_touch = None
 
     # ── fusion_w trên val (giữ nguyên — chỉ lấy trọng số, bỏ ngưỡng cũ) ──
-    _, fusion_w, _ = _tune(
+    _, fusion_w, _ = tune(
         owner_id, val_key, data_dir, impostor_dir, encoder, anchors,
         cohort_mean, cohort_std, rf_touch, artifacts, data_mode)
 
@@ -332,7 +332,7 @@ def enroll(owner_id, n_enroll_sessions, data_dir, encoder, artifacts,
                       thr_inertial, rf_touch, artifacts, fusion_w, thr_fusion, data_mode)
 
 
-def _eer_threshold(y, s):
+def eer_threshold(y, s):
     if len(np.unique(y)) < 2:
         return 0.5
     fpr, tpr, thr = roc_curve(y, s)
@@ -340,7 +340,7 @@ def _eer_threshold(y, s):
     return float(np.clip(thr[i], 0.0, 1.0))
 
 
-def _touch_score(rf_touch, artifacts, user_dir, sid):
+def touch_score(rf_touch, artifacts, user_dir, sid):
     """Điểm touch mức phiên ∈[0,1] = trung bình prob RF trên các sub-window
     của phiên; None nếu không có/không hợp lệ."""
     if rf_touch is None:
@@ -355,7 +355,7 @@ def _touch_score(rf_touch, artifacts, user_dir, sid):
         return None
 
 
-def _tune(owner_id, val_key, data_dir, impostor_dir, encoder, anchors,
+def tune(owner_id, val_key, data_dir, impostor_dir, encoder, anchors,
           cohort_mean, cohort_std, rf_touch, artifacts, mode):
     """Trả (thr_inertial, fusion_w, thr_fusion).
 
@@ -374,7 +374,7 @@ def _tune(owner_id, val_key, data_dir, impostor_dir, encoder, anchors,
             return
         s_in = float(score_inertial(extract_embeddings(encoder, u[sid]),
                                     anchors, cohort_mean, cohort_std).mean())
-        s_to = _touch_score(rf_touch, artifacts, Path(src) / uid, sid)
+        s_to = touch_score(rf_touch, artifacts, Path(src) / uid, sid)
         si.append(s_in); st.append(s_to if s_to is not None else 0.5); y.append(label)
 
     add(owner_id, val_key, 1, data_dir)
@@ -424,7 +424,7 @@ def verify_session(enrollment: Enrollment, test_user_id, test_session_id,
         extract_embeddings(encoder, windows),
         enrollment.anchors, enrollment.cohort_mean, enrollment.cohort_std).mean())
 
-    p_touch = _touch_score(enrollment.rf_touch, enrollment.artifacts,
+    p_touch = touch_score(enrollment.rf_touch, enrollment.artifacts,
                            Path(data_dir) / test_user_id, test_session_id)
 
     w = enrollment.fusion_w if fusion_w_override is None else fusion_w_override

@@ -29,7 +29,7 @@ N_CH = 9
 ARCHS = ["cnn", "convlstm", "convlstm_bi"]
 
 
-def _natural_key(name: str):
+def natural_key(name: str):
     digits = "".join(c for c in name if c.isdigit())
     return (int(digits) if digits else 0, name)
 
@@ -37,7 +37,7 @@ def _natural_key(name: str):
 def dataset_table(data_dir: Path) -> None:
     users = sorted(
         [d for d in data_dir.iterdir() if d.is_dir()],
-        key=lambda d: _natural_key(d.name),
+        key=lambda d: natural_key(d.name),
     )
     if not users:
         print(f"  (không tìm thấy user trong {data_dir})")

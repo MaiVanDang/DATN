@@ -38,7 +38,7 @@ import step2_preprocess as s
 
 USER_DON = "user16"
 
-# Cờ điều khiển _save(): mặc định phục vụ CLI (lưu file, không hiện).
+# Cờ điều khiển save(): mặc định phục vụ CLI (lưu file, không hiện).
 # Notebook đặt SHOW=True, SAVE=False để chỉ xem; bật SAVE=True khi muốn lưu.
 SAVE = True
 SHOW = False
@@ -59,7 +59,7 @@ plt.rcParams.update({
 })
 
 
-def _save(fig, out, name):
+def save(fig, out, name):
     if SAVE:
         Path(out).mkdir(parents=True, exist_ok=True)
         fig.savefig(Path(out) / name)
@@ -70,7 +70,7 @@ def _save(fig, out, name):
         plt.close(fig)
 
 
-def _walking_files(data_dir):
+def walking_files(data_dir):
     """[(user, file walking đầu tiên)] cho mỗi user."""
     out = {}
     for udir in sorted(Path(data_dir).iterdir()):
@@ -81,14 +81,14 @@ def _walking_files(data_dir):
     return list(out.items())
 
 
-def _first_segment(path):
+def first_segment(path):
     df = pd.read_csv(path).dropna(subset=CHANNELS)
-    ts, to = s._ts_info(df)
+    ts, to = s.ts_info(df)
     segs = s.split_segments(df)
     return (segs[0], ts, to) if segs else (None, ts, to)
 
 
-def _pick_raw(data_dir, activity, user, session):
+def pick_raw(data_dir, activity, user, session):
     """File <activity>_*.csv đầu tiên khớp user + session."""
     pat = re.compile(rf"session[_]?0*{session}$", re.I)
     for f in sorted(glob.glob(str(Path(data_dir) / "**" / f"{activity}_*.csv"),
@@ -99,7 +99,7 @@ def _pick_raw(data_dir, activity, user, session):
     return None
 
 
-def _load_processed(proc_dir):
+def load_processed(proc_dir):
     """Đọc .npy theo từng user -> dict {cfg: {X, y}} cho 'all' và 'walking'.
 
     Chỉ tính các user thuộc bộ dữ liệu (user<số>); bỏ qua dataroot và các
@@ -127,33 +127,33 @@ def _load_processed(proc_dir):
     return res
 
 
-def _user_of(y):
+def user_of(y):
     """Nhãn '<uid>_session_k' -> '<uid>'."""
     return np.array([str(l).split("_session")[0] for l in y])
 
 
-def _unum(u):
+def unum(u):
     m = re.search(r"\d+", u)
     return int(m.group()) if m else 0
 
 
 def plot_phanbo(res, out):
     n_all, n_walk = len(res["all"]["y"]), len(res["walking"]["y"])
-    users = _user_of(res["all"]["y"])
-    uniq = sorted(set(users), key=_unum)
+    users = user_of(res["all"]["y"])
+    uniq = sorted(set(users), key=unum)
     counts = [int(np.sum(users == u)) for u in uniq]
 
     fig, ax = plt.subplots(figsize=(7.5, 4))
     ax.bar(range(len(uniq)), counts, color="#4C72B0")
     ax.set_xlabel("Người dùng"); ax.set_ylabel("Số cửa sổ")
     ax.set_xticks(range(len(uniq)))
-    ax.set_xticklabels([f"U{_unum(u)}" for u in uniq], rotation=90, fontsize=8)
+    ax.set_xticklabels([f"U{unum(u)}" for u in uniq], rotation=90, fontsize=8)
     if counts:
         tb = float(np.mean(counts))
         ax.axhline(tb, ls="--", c="gray", lw=1)
         ax.text(len(uniq) - 1, tb, f" TB={tb:.0f}", va="bottom", ha="right",
                 fontsize=9, color="gray")
-    _save(fig, out, "phanbo_theo_nguoi.png")
+    save(fig, out, "phanbo_theo_nguoi.png")
 
     fig, ax = plt.subplots(figsize=(4.5, 4))
     ax.bar(["Walking", "All"], [n_walk, n_all], color=["#55A868", "#4C72B0"])
@@ -161,12 +161,12 @@ def plot_phanbo(res, out):
     for i, v in enumerate([n_walk, n_all]):
         ax.text(i, v, f"{v:,}".replace(",", "."),   # dấu chấm ngăn cách nghìn (kiểu VN)
                 ha="center", va="bottom", fontsize=9)
-    _save(fig, out, "phanbo_theo_cauhinh.png")
+    save(fig, out, "phanbo_theo_cauhinh.png")
 
 
 def plot_tin_hieu_tho(data_dir, out, user, session, seconds):
-    fw = _pick_raw(data_dir, "walking", user, session)
-    fs = _pick_raw(data_dir, "sitting", user, session)
+    fw = pick_raw(data_dir, "walking", user, session)
+    fs = pick_raw(data_dir, "sitting", user, session)
     if not fw or not fs:
         print(f"  [bỏ qua] thiếu walking/sitting (user={user}, session={session})")
         return
@@ -187,13 +187,13 @@ def plot_tin_hieu_tho(data_dir, out, user, session, seconds):
         ax.set_xlabel("Thời gian (s)"); ax.set_ylabel("Gia tốc (m/s$^2$)")
         ax.set_xlim(0, t[-1] if len(t) > 1 else 1); ax.set_ylim(ylim)
         ax.legend(loc="upper right", fontsize=9)
-        _save(fig, out, name)
+        save(fig, out, name)
 
 
 def plot_zscore_users(files, out, n_users=3):
     picked = []
     for uid, f in files:
-        seg, ts, to = _first_segment(f)
+        seg, ts, to = first_segment(f)
         if seg is None or len(seg) < s.WINDOW_SIZE:
             continue
         raw = seg["acc_x"].values[:s.WINDOW_SIZE].astype(np.float64)
@@ -211,7 +211,7 @@ def plot_zscore_users(files, out, n_users=3):
         ax.plot(t, raw, color=c, lw=1.1, alpha=0.85, label=uid)
     ax.set_xlabel("Thời gian (s)"); ax.set_ylabel("acc_x (m/s$^2$)")
     ax.legend(loc="upper right", fontsize=9, title="Người dùng")
-    _save(fig, out, "2a_zscore_truoc.png")
+    save(fig, out, "2a_zscore_truoc.png")
 
     fig, ax = plt.subplots(figsize=(8, 3.6))
     ax.axhline(0, color="black", lw=0.8, alpha=0.5)
@@ -219,7 +219,7 @@ def plot_zscore_users(files, out, n_users=3):
         ax.plot(t, z, color=c, lw=1.1, alpha=0.85, label=uid)
     ax.set_xlabel("Thời gian (s)"); ax.set_ylabel("acc_x (chuẩn hóa)")
     ax.legend(loc="upper right", fontsize=9, title="Người dùng")
-    _save(fig, out, "2b_zscore_sau.png")
+    save(fig, out, "2b_zscore_sau.png")
 
 
 def plot_scale_kenh(files, out):
@@ -249,13 +249,13 @@ def plot_scale_kenh(files, out):
         ax.set_xticks(range(1, 10))
         ax.set_xticklabels(CHANNELS, rotation=45, ha="right", fontsize=8)
         ax.set_ylabel("Giá trị")
-        _save(fig, out, name)
+        save(fig, out, name)
 
 
 def plot_window_zscore(files, out):
     seg = None
     for uid, f in files:
-        seg, ts, to = _first_segment(f)
+        seg, ts, to = first_segment(f)
         if seg is not None and len(seg) >= s.WINDOW_SIZE:
             break
     if seg is None:
@@ -272,7 +272,7 @@ def plot_window_zscore(files, out):
         ax.plot(t, w[:, j], color=col, lw=1.0, alpha=0.85, label=c)
     ax.set_xlabel("Thời gian (s)"); ax.set_ylabel("Giá trị thô")
     ax.legend(loc="upper right", fontsize=9)
-    _save(fig, out, "4a_window_truoc.png")
+    save(fig, out, "4a_window_truoc.png")
 
     fig, ax = plt.subplots(figsize=(8, 3.6))
     ax.axhline(0, color="black", lw=0.8, alpha=0.5)
@@ -280,7 +280,7 @@ def plot_window_zscore(files, out):
         ax.plot(t, wz[:, j], color=col, lw=1.0, alpha=0.85, label=c)
     ax.set_xlabel("Thời gian (s)"); ax.set_ylabel("Giá trị chuẩn hóa")
     ax.legend(loc="upper right", fontsize=9)
-    _save(fig, out, "4b_window_zscore_sau.png")
+    save(fig, out, "4b_window_zscore_sau.png")
 
 
 def plot_cua_so_truot(files, out, n_win=6):
@@ -288,7 +288,7 @@ def plot_cua_so_truot(files, out, n_win=6):
     WINDOW_SIZE mẫu, trượt với bước STRIDE (chồng lấn cao)."""
     seg = None
     for _, f in files:
-        seg, _ts, _to = _first_segment(f)
+        seg, _ts, _to = first_segment(f)
         if seg is not None:
             break
     if seg is None:
@@ -333,7 +333,7 @@ def plot_cua_so_truot(files, out, n_win=6):
     ax.set_xlabel("Thời gian (s)")
     ax.set_ylabel("acc_x (m/s$^2$)")
     ax.set_ylim(base - n_win * dy - 0.05 * yr, y1 + 0.15 * yr)
-    _save(fig, out, "cua_so_truot.png")
+    save(fig, out, "cua_so_truot.png")
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -349,7 +349,7 @@ def find_gaps(df):
     Trả về dict gồm: df đã sắp xếp theo thời gian, mảng thời gian giây (t),
     danh sách chỉ số gap, độ dài mỗi gap (ms), các đoạn liên tục và cờ giữ/loại.
     """
-    ts_col, to_sec = s._ts_info(df)
+    ts_col, to_sec = s.ts_info(df)
     df = df.sort_values(ts_col).reset_index(drop=True)
     diffs = df[ts_col].diff() / to_sec                      # giây, NaN ở phần tử đầu
     gap_idx = list(diffs[diffs > s.MAX_GAP_SEC].index)      # ĐÚNG ngưỡng pipeline
@@ -381,7 +381,7 @@ def report_gaps(info, src):
     print(f"  • Đoạn < 1 cửa sổ ({s.WINDOW_SIZE} mẫu) bị LOẠI = {dropped}")
 
 
-def _auto_zoom(info, pad=3.0):
+def auto_zoom(info, pad=3.0):
     """Vùng phóng to tự động: bao quanh các đoạn ngắn bị loại, đệm pad giây."""
     t = info["t"]
     shorts = [(a, b) for a, b, _n, keep in info["segs"] if not keep]
@@ -392,7 +392,7 @@ def _auto_zoom(info, pad=3.0):
     return max(0.0, t0 - pad), min(t[-1], t1 + pad)
 
 
-def _draw_segments(ax, info, x0, x1):
+def draw_segments(ax, info, x0, x1):
     df, t = info["df"], info["t"]
     acc = np.sqrt(sum(df[c].to_numpy(float) ** 2 for c in ACC))
     for i in info["gap_idx"]:                                  # tô khoảng trống
@@ -421,19 +421,19 @@ def plot_phan_doan(data_dir, out, user, session, activity, attempt, zoom):
     legend = [Patch(color=C_KEEP, label="Đoạn hợp lệ (giữ lại)"),
               Patch(color=C_DROP, label="Đoạn ngắn (loại bỏ)"),
               Patch(color=C_GAP, label="Khoảng trống")]
-    zr = zoom or _auto_zoom(info)
+    zr = zoom or auto_zoom(info)
 
     fig, ax = plt.subplots(figsize=(10, 3.2))                  # (a) toàn tệp
-    _draw_segments(ax, info, info["t"][0], info["t"][-1])
+    draw_segments(ax, info, info["t"][0], info["t"][-1])
     if zr:
         ax.axvspan(zr[0], zr[1], facecolor="none", edgecolor="#444", ls="--", lw=1.2, zorder=5)
     ax.legend(handles=legend, loc="upper center", ncol=3, fontsize=8.5, framealpha=0.9)
-    _save(fig, out, "phan_doan_a.png")
+    save(fig, out, "phan_doan_a.png")
 
     if zr:                                                     # (b) phóng to
         fig, ax = plt.subplots(figsize=(10, 3.2))
-        _draw_segments(ax, info, zr[0], zr[1])
-        _save(fig, out, "phan_doan_b.png")
+        draw_segments(ax, info, zr[0], zr[1])
+        save(fig, out, "phan_doan_b.png")
 
 
 def main():
@@ -465,7 +465,7 @@ def main():
     if only in ("all", "phanbo"):
         print("[A] Phân bố sau tiền xử lý")
         if Path(args.proc_dir).is_dir():
-            res = _load_processed(args.proc_dir)
+            res = load_processed(args.proc_dir)
             if len(res["all"]["y"]):
                 plot_phanbo(res, out)
             else:
@@ -479,7 +479,7 @@ def main():
 
     if only in ("all", "zscore"):
         print("[C] Minh họa cửa sổ trượt & chuẩn hóa Z-score")
-        files = _walking_files(args.data_dir)
+        files = walking_files(args.data_dir)
         if not files:
             print("  [bỏ qua] không thấy walking_*.csv trong", args.data_dir)
         else:
