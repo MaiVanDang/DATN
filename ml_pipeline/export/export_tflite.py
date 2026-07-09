@@ -1,19 +1,16 @@
 """
-Unified TFLite export: BackboneCNN / ConvLSTM / ConvLSTM-Bi
+TFLite export cho BackboneCNN — kiến trúc được chọn để triển khai.
 
-Usage (run from repo root f:/DATN):
+Chạy từ gốc repo (f:/DATN):
     python ml_pipeline/export/export_tflite.py
 
-To switch model, change MODEL on line 16.
+Đổi TRAIN_MODE = "walking" | "all" bên dưới rồi chạy cho từng chế độ.
 """
 
 import os, sys
 import numpy as np
 
-MODEL = "cnn"
 TRAIN_MODE = "walking"
-
-assert MODEL in ("cnn", "convlstm", "convlstm_bi"), f"Unknown model: {MODEL}"
 
 try:
     import tensorflow as tf
@@ -23,14 +20,8 @@ except ImportError:
 
 import torch
 
-ROOT     = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-ARTIFACTS = os.path.join(ROOT, "web_demo", "artifacts")
-
-MODEL_DIR = {
-    "cnn":         os.path.join(ARTIFACTS, "cnn_v2"),
-    "convlstm":    os.path.join(ARTIFACTS, "convlstm_v2"),
-    "convlstm_bi": os.path.join(ARTIFACTS, "convlstm_bi_v2"),
-}[MODEL]
+ROOT      = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+MODEL_DIR = os.path.join(ROOT, "ml_pipeline", "artifacts", "cnn")
 
 PT_PATH    = os.path.join(MODEL_DIR, f"models_{TRAIN_MODE}", "backbone.pt")
 EXPORT_DIR = os.path.join(MODEL_DIR, f"export_{TRAIN_MODE}")
@@ -39,45 +30,30 @@ ASSETS_DIR = os.path.join(ROOT, "android_app", "B_authenticator_app",
                            "app", "src", "main", "assets", TRAIN_MODE)
 
 def to_np(tensor):
-    """Tensor → numpy, compatible with NumPy 2.x."""
+    """Tensor → numpy, tương thích NumPy 2.x."""
     return np.array(tensor.detach().float().cpu().tolist(), dtype=np.float32)
 
-print(f"\n[1] Loading {MODEL} -> {PT_PATH}")
+print(f"\n[1] Loading cnn -> {PT_PATH}")
 sd = torch.load(PT_PATH, map_location="cpu")
 print("    Keys:", list(sd.keys()))
 
 print("\n[2] Building Keras model ...")
 
-def conv_block_2layer(inp):
-    """2 conv blocks dùng chung cho cả 3 model. Đầu ra: [batch, 50, 128]"""
-    x = tf.keras.layers.Conv1D(64,  5, padding="same", use_bias=True, name="conv1")(inp)
-    x = tf.keras.layers.BatchNormalization(name="bn1")(x)
-    x = tf.keras.layers.ReLU(name="relu1")(x)
-    x = tf.keras.layers.MaxPooling1D(2, name="pool1")(x)
-    x = tf.keras.layers.Conv1D(128, 3, padding="same", use_bias=True, name="conv2")(x)
-    x = tf.keras.layers.BatchNormalization(name="bn2")(x)
-    x = tf.keras.layers.ReLU(name="relu2")(x)
-    x = tf.keras.layers.MaxPooling1D(2, name="pool2")(x)
-    return x
-
 inp = tf.keras.Input(shape=(200, 9), name="input")
-x   = conv_block_2layer(inp)
+x = tf.keras.layers.Conv1D(64,  5, padding="same", use_bias=True, name="conv1")(inp)
+x = tf.keras.layers.BatchNormalization(name="bn1")(x)
+x = tf.keras.layers.ReLU(name="relu1")(x)
+x = tf.keras.layers.MaxPooling1D(2, name="pool1")(x)
+x = tf.keras.layers.Conv1D(128, 3, padding="same", use_bias=True, name="conv2")(x)
+x = tf.keras.layers.BatchNormalization(name="bn2")(x)
+x = tf.keras.layers.ReLU(name="relu2")(x)
+x = tf.keras.layers.MaxPooling1D(2, name="pool2")(x)
+x = tf.keras.layers.Conv1D(128, 3, padding="same", use_bias=True, name="conv3")(x)
+x = tf.keras.layers.BatchNormalization(name="bn3")(x)
+x = tf.keras.layers.ReLU(name="relu3")(x)
+x = tf.keras.layers.GlobalAveragePooling1D(name="gap")(x)
 
-if MODEL == "cnn":
-    x = tf.keras.layers.Conv1D(128, 3, padding="same", use_bias=True, name="conv3")(x)
-    x = tf.keras.layers.BatchNormalization(name="bn3")(x)
-    x = tf.keras.layers.ReLU(name="relu3")(x)
-    x = tf.keras.layers.GlobalAveragePooling1D(name="gap")(x)
-
-elif MODEL == "convlstm":
-    x = tf.keras.layers.LSTM(128, return_sequences=False, unroll=True, name="lstm")(x)
-
-elif MODEL == "convlstm_bi":
-    x = tf.keras.layers.Bidirectional(
-            tf.keras.layers.LSTM(64, return_sequences=False, unroll=True, name="lstm"),
-            merge_mode="concat", name="bilstm")(x)
-
-keras_model = tf.keras.Model(inp, x, name=f"backbone_{MODEL}")
+keras_model = tf.keras.Model(inp, x, name="backbone_cnn")
 print(f"    Output shape: {keras_model.output_shape}")
 
 print("\n[3] Transferring weights ...")
@@ -95,42 +71,12 @@ def set_bn(layer, prefix):
         to_np(sd[f"{prefix}.running_var"]),
     ])
 
-conv_prefix = "encoder" if MODEL == "cnn" else "encoder.conv"
-
-set_conv(keras_model.get_layer("conv1"), f"{conv_prefix}.0.weight", f"{conv_prefix}.0.bias")
-set_bn  (keras_model.get_layer("bn1"),   f"{conv_prefix}.1")
-set_conv(keras_model.get_layer("conv2"), f"{conv_prefix}.4.weight", f"{conv_prefix}.4.bias")
-set_bn  (keras_model.get_layer("bn2"),   f"{conv_prefix}.5")
-
-if MODEL == "cnn":
-    set_conv(keras_model.get_layer("conv3"), "encoder.8.weight", "encoder.8.bias")
-    set_bn  (keras_model.get_layer("bn3"),   "encoder.9")
-
-elif MODEL == "convlstm":
-    lstm_layer = keras_model.get_layer("lstm")
-    kernel     = to_np(sd["encoder.lstm.weight_ih_l0"]).T
-    recurrent  = to_np(sd["encoder.lstm.weight_hh_l0"]).T
-    bias       = (to_np(sd["encoder.lstm.bias_ih_l0"])
-                + to_np(sd["encoder.lstm.bias_hh_l0"]))
-    lstm_layer.set_weights([kernel, recurrent, bias])
-
-elif MODEL == "convlstm_bi":
-    bidir_layer = keras_model.get_layer("bilstm")
-    def lstm_weights(ih_key, hh_key, bih_key, bhh_key):
-        return [
-            to_np(sd[ih_key]).T,
-            to_np(sd[hh_key]).T,
-            to_np(sd[bih_key]) + to_np(sd[bhh_key]),
-        ]
-    fwd = lstm_weights("encoder.lstm.weight_ih_l0",
-                        "encoder.lstm.weight_hh_l0",
-                        "encoder.lstm.bias_ih_l0",
-                        "encoder.lstm.bias_hh_l0")
-    bwd = lstm_weights("encoder.lstm.weight_ih_l0_reverse",
-                        "encoder.lstm.weight_hh_l0_reverse",
-                        "encoder.lstm.bias_ih_l0_reverse",
-                        "encoder.lstm.bias_hh_l0_reverse")
-    bidir_layer.set_weights(fwd + bwd)
+set_conv(keras_model.get_layer("conv1"), "encoder.0.weight", "encoder.0.bias")
+set_bn  (keras_model.get_layer("bn1"),   "encoder.1")
+set_conv(keras_model.get_layer("conv2"), "encoder.4.weight", "encoder.4.bias")
+set_bn  (keras_model.get_layer("bn2"),   "encoder.5")
+set_conv(keras_model.get_layer("conv3"), "encoder.8.weight", "encoder.8.bias")
+set_bn  (keras_model.get_layer("bn3"),   "encoder.9")
 
 print("    Weights OK")
 
@@ -193,15 +139,15 @@ if os.path.exists(manifest_path):
 
 manifest.update({
     "model_file": "backbone.tflite",
-    "model_kind": f"backbone_encoder_{MODEL}",
-    "source_checkpoint": f"{MODEL}_v2 {TRAIN_MODE}",
+    "model_kind": "backbone_encoder_cnn",
+    "source_checkpoint": f"cnn {TRAIN_MODE}",
     "exported_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-    "export_pipeline_version": "v5-unified-tflite",
+    "export_pipeline_version": "v5-cnn-tflite",
     "context_mode": TRAIN_MODE
 })
 
 with open(manifest_path, "w", encoding="utf-8") as f:
     json.dump(manifest, f, indent=2)
-print(f"    OK   export_manifest.json (updated)")
+print("    OK   export_manifest.json (updated)")
 
-print(f"\n=== Done [{MODEL}] -- rebuild app in Android Studio ===")
+print("\n=== Done [cnn] -- rebuild app in Android Studio ===")

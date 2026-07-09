@@ -23,7 +23,7 @@ from verifier import (
 )
 
 ARTIFACTS_ROOT = Path("artifacts")
-ARCH, ARCH_DIR, N_USERS = "cnn", "cnn_v2", 19
+ARCH, ARCH_DIR, N_USERS = "cnn", "cnn", 19
 MODE_LABEL = {"walking": "Đi bộ", "all": "Toàn bộ hoạt động"}
 
 st.set_page_config(page_title="Active Auth Demo", page_icon="🔐", layout="wide")

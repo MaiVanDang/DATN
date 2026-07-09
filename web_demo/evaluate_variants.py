@@ -30,12 +30,12 @@ MAX_WIN_SESS  = 50     # max windows lấy từ mỗi session (tránh hàng ngh�
 N_JOBS        = -1
 
 VARIANTS = [
-    {"name": "CNN + walking",         "arch": "cnn",         "mode": "walking", "dir": "cnn_v2"},
-    {"name": "CNN + all",             "arch": "cnn",         "mode": "all",     "dir": "cnn_v2"},
-    {"name": "ConvLSTM + walking",    "arch": "convlstm",    "mode": "walking", "dir": "convlstm_v2"},
-    {"name": "ConvLSTM + all",        "arch": "convlstm",    "mode": "all",     "dir": "convlstm_v2"},
-    {"name": "ConvLSTM-Bi + walking", "arch": "convlstm_bi", "mode": "walking", "dir": "convlstm_bi_v2"},
-    {"name": "ConvLSTM-Bi + all",     "arch": "convlstm_bi", "mode": "all",     "dir": "convlstm_bi_v2"},
+    {"name": "CNN + walking",         "arch": "cnn",         "mode": "walking", "dir": "cnn"},
+    {"name": "CNN + all",             "arch": "cnn",         "mode": "all",     "dir": "cnn"},
+    {"name": "ConvLSTM + walking",    "arch": "convlstm",    "mode": "walking", "dir": "convlstm"},
+    {"name": "ConvLSTM + all",        "arch": "convlstm",    "mode": "all",     "dir": "convlstm"},
+    {"name": "ConvLSTM-Bi + walking", "arch": "convlstm_bi", "mode": "walking", "dir": "convlstm_bi"},
+    {"name": "ConvLSTM-Bi + all",     "arch": "convlstm_bi", "mode": "all",     "dir": "convlstm_bi"},
 ]
 
 # ── HELPERS ───────────────────────────────────────────────────────────
