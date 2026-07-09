@@ -64,11 +64,11 @@
 > *Nói:* backbone chỉ để học không gian embedding; xác thực bằng đối sánh anchor nên **thêm người mới không cần train lại**.
 
 ## Slide 9 — Kết quả: So sánh kiến trúc
-- Chỉ số: **FAR, FRR, EER, AUC**; 2 kịch bản **tập đóng** và **tập mở**
-- Tập đóng: **CNN 1D ≈ 3,4% EER** (nhóm tốt nhất)
-- Tập mở (khó hơn): **CNN 1D tốt nhất** — CNN-LSTM/BiLSTM ~30% (quá khớp)
+- **FAR** (nhận nhầm người lạ) và **FRR** (từ chối nhầm chủ máy) đánh đổi theo ngưỡng → tổng hợp bằng **EER**; kèm **AUC** (phân biệt tổng thể, càng gần 1 càng tốt)
+- Tập đóng: **CNN 1D** — EER ≈ **3,4%**, AUC **0,99** (nhóm tốt nhất)
+- Tập mở (khó hơn): **CNN 1D tốt nhất** — AUC **0,85**, vượt CNN-LSTM/BiLSTM (EER ~30%, AUC ~0,82; quá khớp)
 - Toàn bộ 3 hoạt động **> chỉ đi bộ** → chọn **CNN 1D**
-- 📊 **Chèn Bảng 5.1 + 5.3** (tập đóng / tập mở)
+- 📊 **Chèn Bảng 5.1 + 5.3** (đủ 4 cột AUC / EER / FAR / FRR)
 
 ## Slide 10 — Kết quả: Hàm chấm điểm
 - So **4 hàm** (cos_mean, cos_knn, **cos_znorm**, maha) — **leave-users-out 6 vòng**
