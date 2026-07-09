@@ -22,7 +22,7 @@ from verifier import (
     list_available_users, load_user_inertial, FIXED_THRESHOLD,
 )
 
-DATA_DIR  = Path(__file__).parent / "processed_data"      # testbed nhỏ
+DATA_DIR  = Path(__file__).parent / "processed"           # testbed nhỏ
 ART_DIR   = Path(__file__).parent.parent / "ml_pipeline" / "artifacts" / "cnn" / "export_all"
 CKPT      = Path(__file__).parent.parent / "ml_pipeline" / "artifacts" / "cnn" / "models_all" / "backbone.pt"
 MODE      = "all"

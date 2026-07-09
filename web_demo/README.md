@@ -1,61 +1,58 @@
 # Active Auth — Web Demo (Streamlit)
 
-Demo so sánh **6 biến thể model** song song:
+Trực quan hóa quá trình xác thực hành vi ở **mức phiên** cho một chủ máy đã đăng ký.
+Hiển thị đồng thời 3 điểm và 2 kết luận để đối chiếu minh bạch:
 
-- **3 kiến trúc**: CNN, ConvLSTM, ConvLSTM-Bi
-- **2 chế độ training**: walking (1 action) + all (3 actions)
+- **Điểm quán tính (`cos_znorm`)** — *đường quyết định chính, khớp bản triển khai on-device*:
+  mean cosine tới anchor → chuẩn hóa z-norm theo nhóm nền (cohort) → sigmoid.
+- **Điểm touch (RF)** — Random Forest owner-vs-pool trên đặc trưng touch **33 chiều** (tap + scroll).
+- **Điểm fusion** — trung bình có trọng số của điểm quán tính và điểm touch.
 
-Mỗi session test được score qua TẤT CẢ 6 model để so sánh trực tiếp.
+Kết luận theo **quán tính** (bản triển khai) và theo **fusion** hiển thị cạnh nhau; nếu fusion không
+tốt hơn quán tính thì bảng sẽ cho thấy đúng như vậy (khớp kết luận "fusion không cải thiện tập mở").
+
+Kiến trúc backbone: **CNN 1D** (kiến trúc đã chọn để triển khai). Ngữ cảnh: **walking** hoặc **all** (3 hoạt động).
 
 ## Cài đặt
 
 ```bash
-cd demo
+cd web_demo
 python -m venv venv
 source venv/bin/activate          # Linux/Mac
 # venv\Scripts\activate           # Windows
-pip install -r requirements.txt
+pip install -r requirements.txt   # streamlit, torch, scikit-learn, numpy, pandas
 ```
 
 ## Cấu trúc cần có
 
 ```
-demo/
-├── app.py
-├── verifier.py
-├── touch_features.py
-├── models.py
-├── build_pool.py
+web_demo/
+├── app.py                  # giao diện Streamlit
+├── verifier.py             # lõi chấm điểm: cos_znorm + RF touch + fusion
+├── models.py               # định nghĩa backbone (CNN / ConvLSTM / ConvLSTM-Bi)
+├── touch_subwindow.py      # đặc trưng touch 33-D (sub-window tap + scroll)
+├── evaluate_variants.py    # (tùy chọn) benchmark 6 biến thể để chọn model
+├── validate_threshold.py   # (tùy chọn) kiểm chứng ngưỡng per-owner vs cố định
 ├── requirements.txt
-├── README.md
 │
-├── artifacts/                            ← root chứa 3 model variants
-│   ├── cnn_v2/
-│   │   ├── models_walking/backbone.pt
-│   │   ├── models_all/backbone.pt
-│   │   ├── export_walking/               ← pool + scaler cho mode 'walking'
-│   │   │   ├── impostor_pool_inertial.npy
-│   │   │   ├── impostor_pool_touch.npy
-│   │   │   └── touch_scaler.json
-│   │   └── export_all/                   ← pool + scaler cho mode 'all'
-│   │       └── ...
-│   ├── convlstm_v2/
-│   │   └── (cấu trúc tương tự)
-│   └── convlstm_bi_v2/
-│       └── (cấu trúc tương tự)
+├── artifacts/
+│   └── cnn/                                 ← CHỈ CNN cần cho demo
+│       ├── models_walking/backbone.pt
+│       ├── models_all/backbone.pt
+│       ├── export_walking/                  ← pool + scaler cho mode 'walking'
+│       │   ├── impostor_pool_inertial.npy
+│       │   ├── impostor_pool_touch.npy
+│       │   └── touch_scaler.json
+│       └── export_all/                      ← (tương tự) cho mode 'all'
+│   └── (convlstm/, convlstm_bi/ chỉ cần khi chạy evaluate_variants.py)
 │
-├── processed_data/                       ← cohort training data
-│   ├── user1/
-│   │   ├── X_walking.npy                 ← windows đi bộ
-│   │   ├── y_walking.npy                 ← session ID per window
-│   │   ├── X_inertial.npy                ← windows tất cả activity
-│   │   ├── y_inertial.npy
-│   │   └── touch_session_features.csv    ← 48-D touch features
-│   └── ... (≥2 users)
-│
-└── newbie_data/                          ← (optional) users UNSEEN
-    └── newbie1/
-        └── (cấu trúc tương tự processed_data)
+└── processed/                          ← dữ liệu người dùng (cohort + chủ máy để demo)
+    ├── user1/
+    │   ├── X_walking.npy  / y_walking.npy   ← cửa sổ đi bộ + nhãn phiên
+    │   ├── X_inertial.npy / y_inertial.npy  ← cửa sổ cả 3 hoạt động
+    │   ├── tap_gestures.csv                 ← sự kiện chạm (cho touch 33-D)
+    │   └── scroll_gestures.csv              ← cử chỉ cuộn
+    └── ... (≥ 2 user)
 ```
 
 ## Chạy demo
@@ -64,56 +61,34 @@ demo/
 streamlit run app.py
 ```
 
-Browser tự mở http://localhost:8501.
+Trình duyệt tự mở http://localhost:8501.
 
-## Flow demo
+## Luồng demo
 
-### Bước 1: Sidebar — cấu hình + enrollment
+1. **Sidebar** → chọn **Thư mục dữ liệu** (mặc định `processed`) và **Ngữ cảnh** (all / walking).
+2. Chọn **Chủ máy** + **Số session enroll** → bấm **🎯 Đăng ký**.
+   Bước này tạo anchor, tính tham số z-norm cohort và ngưỡng per-owner; huấn luyện RF touch nếu có dữ liệu chạm.
+3. (Nếu có touch) chỉnh slider **Fusion** để khám phá — mặc định là trọng số được tune tự động trên tập val.
+4. Bấm **▶️ Chấm điểm tất cả** → bảng **Chủ máy vs Người lạ** với các cột:
+   `Người · Session · Điểm quán tính · Điểm touch · Điểm fusion · Kết luận (quán tính) · Kết luận (fusion) · Đúng?`
+   kèm 2 chỉ số **Độ chính xác** (quán tính vs fusion).
 
-1. Verify sidebar hiển thị `✓ Loaded 6/6 variants`
-2. Chọn `Owner pool` (Cohort hoặc Newbie)
-3. Chọn `Owner user`
-4. Đặt `Số session để enroll` (mặc định 4)
-5. Bấm **Enroll all 6 variants** → train 6 RF (~30 giây)
+## Ngưỡng quyết định
 
-### Bước 2: Tab "Own data" — FRR
+Ngưỡng được **hiệu chuẩn riêng cho từng chủ máy** ngay lúc đăng ký (cân bằng FAR≈FRR trên phiên val,
+ở đúng mức gộp cửa sổ mà quyết định sử dụng), fallback về hằng số `0.23` khi thiếu dữ liệu. Đây là
+cùng cơ chế ngưỡng per-owner với bản triển khai trên thiết bị.
 
-Bấm **Run own-data verification** → bảng FRR per-variant + chi tiết từng session × variant.
+## Script phụ (không thuộc demo)
 
-### Bước 3: Tab "Single impostor"
-
-Pick impostor → **Run impostor verification** → so sánh FAR giữa 6 variants.
-
-### Bước 4: Tab "Batch in-cohort"
-
-**Run batch verification** → tính FAR tổng trên tất cả cohort impostors, có distribution chart 2×3 (mỗi subplot 1 variant).
-
-### Bước 5: Tab "Newbie" — generalization
-
-Pick newbie hoặc batch → **Run newbie test** → đánh giá khả năng generalize của từng variant trên user UNSEEN.
-
-## Threshold
-
-Sidebar có toggle:
-
-- **Adaptive per-variant (mặc định)**: mỗi variant dùng EER threshold riêng tính từ val set lúc enroll
-- **Manual**: 1 threshold thủ công áp dụng cho cả 6 variant (để so sánh fair tại cùng operating point)
-
-## Bảng kết quả
-
-Mỗi tab hiển thị 2 thứ:
-
-1. **Metric summary** — 6 dòng (1 dòng/variant), cột FAR hoặc FRR, có highlight best (xanh) / worst (đỏ)
-2. **Detail table** — long-form, cột: `model | train_mode | test_user | session | p_inertial | p_touch | fused | threshold | decision | n_windows`
+- `evaluate_variants.py` — so 6 biến thể (3 kiến trúc × 2 ngữ cảnh) bằng kiểm thử chéo leave-users-out
+  (AUC/EER, kích thước, độ trễ) để làm căn cứ chọn CNN. Cần đủ 3 folder `cnn/`, `convlstm/`, `convlstm_bi/`.
+- `validate_threshold.py` — đối chiếu ngưỡng per-owner với ngưỡng cố định, báo FRR (owner bị từ chối) và FAR (impostor lọt).
 
 ## Troubleshooting
 
-**`❌ Thiếu các file/folder sau`**: kiểm tra `artifacts/` có đủ 3 model × 2 mode = 12 sub-folder (6 `models_*` + 6 `export_*`).
-
-**`touch_session_features.csv không tồn tại`**: chạy step2 của training pipeline để generate file này.
-
-**Backbone size mismatch**: đã được handle trong `models.py` (drop classifier head khi load nếu n_users khác lúc train).
-
-**Touch RF skipped**: user không có touch data hoặc < 2 session có touch. Demo tự fallback dùng pure inertial cho variant đó.
-
-**Variant nào đó enroll thất bại**: app sẽ hiển thị warning và tiếp tục với các variant còn lại — không stop toàn bộ.
+- **Không thấy user**: kiểm tra `processed/<user>/` có `X_*.npy` + `y_*.npy`.
+- **Nhánh touch bị bỏ qua**: user thiếu `tap_gestures.csv` / `scroll_gestures.csv` hoặc lệch chiều (≠ 33) → demo tự chạy thuần quán tính, cột touch/fusion để trống.
+- **Backbone size mismatch**: đã xử lý trong `models.py` (bỏ classifier head khi `n_users` khác lúc train).
+- **Thiếu `impostor_pool_*.npy` trong `export_<mode>/`**: demo vẫn chạy nhưng z-norm cohort suy biến về cosine thô → nên bảo đảm có đủ pool để điểm sát bản triển khai.
+```

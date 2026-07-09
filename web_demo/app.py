@@ -27,9 +27,7 @@ ARCH, ARCH_DIR, N_USERS = "cnn", "cnn", 19
 MODE_LABEL = {"walking": "Đi bộ", "all": "Toàn bộ hoạt động"}
 
 st.set_page_config(page_title="Active Auth Demo", page_icon="🔐", layout="wide")
-st.title("🔐 Demo xác thực hành vi — đa phương thức")
-st.caption("Đường quyết định on-device là **quán tính (cos_znorm)**. Điểm touch và "
-           "fusion hiển thị để so sánh minh bạch.")
+st.title("🔐 Demo xác thực hành vi")
 
 
 @st.cache_resource
@@ -44,7 +42,7 @@ def fmt(x): return "—" if x is None else f"{x:.3f}"
 # ── Sidebar: cấu hình + enroll + slider fusion ──
 with st.sidebar:
     st.header("⚙️ Cấu hình")
-    data_dir = Path(st.text_input("Thư mục dữ liệu", value="processed_data"))
+    data_dir = Path(st.text_input("Thư mục dữ liệu", value="processed"))
     mode = st.radio("Ngữ cảnh", ["all", "walking"],
                     format_func=lambda m: MODE_LABEL[m], index=0)
 
@@ -162,18 +160,4 @@ if st.button("▶️ Chấm điểm tất cả", type="primary"):
         m1, m2 = st.columns(2)
         m1.metric("Độ chính xác — quán tính (triển khai)", f"{acc_in:.0f}%")
         m2.metric("Độ chính xác — fusion", f"{acc_fu:.0f}%" if has_touch else "—")
-        if has_touch and acc_fu <= acc_in:
-            st.info("Fusion **không vượt** nhánh quán tính — minh họa đúng kết luận của báo cáo: "
-                    "trong điều kiện dữ liệu này, dung hợp touch không cải thiện open-set.")
-
-st.divider()
-with st.expander("ℹ️ Vì sao bản triển khai trên app là đơn modal?"):
-    st.markdown(
-        "- **Về mô hình**, hệ thống hỗ trợ đa phương thức và web demo này trình bày đầy đủ "
-        "điểm quán tính, touch và fusion.\n"
-        "- **Trên Android**, thu sự kiện chạm ở chế độ nền bị giới hạn bởi quyền hệ thống "
-        "(Accessibility), nên bản on-device dùng cấu hình đơn modal quán tính.\n"
-        "- Ngoài ra, trong đánh giá open-set, **fusion touch không cải thiện** so với nhánh "
-        "quán tính — web demo cho thấy trực tiếp điều này qua hai cột kết luận."
-    )
-    
+        

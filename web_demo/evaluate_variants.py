@@ -22,7 +22,7 @@ from web_demo.verifier import (
 )
 
 # ── CONFIG ────────────────────────────────────────────────────────────
-DATA_DIR      = Path(__file__).parent / "processed_data"
+DATA_DIR      = Path(__file__).parent / "processed"
 ARTIFACTS_DIR = Path(__file__).parent / "artifacts"
 N_ENROLL      = 4      # số session enroll
 MAX_IMP_EMB   = 200    # cap impostor pool size
