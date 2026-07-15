@@ -29,7 +29,7 @@ ml_pipeline/
 ├── step2_preprocess.py         Tiền xử lý quán tính + trích đặc trưng touch
 ├── dataset_statistics.py       Thống kê số cửa sổ / người dùng
 ├── report_dataset_stats.py     Thống kê bổ sung phục vụ báo cáo
-├── ve_bieu_do.py               Sinh toàn bộ biểu đồ minh họa dữ liệu
+├── plot_charts.py              Sinh toàn bộ biểu đồ minh họa dữ liệu
 ├── export/
 │   ├── export_tflite.py        Export Keras/checkpoint → TFLite (hợp nhất 3 kiến trúc)
 │   └── export_tflite_cnn.py    Export riêng backbone CNN → TFLite
@@ -64,7 +64,7 @@ python step2_preprocess.py
 python dataset_statistics.py
 
 # 4. Sinh biểu đồ minh họa -> plots/
-python ve_bieu_do.py --data_dir ./data --proc_dir ./processed --out ./plots
+python plot_charts.py --data_dir ./data --proc_dir ./processed --out ./plots
 ```
 
 ### Chạy trên Colab (cần PyTorch + các module `models.py`, `dataset.py`, `config.py`)
@@ -96,5 +96,5 @@ python export/export_tflite_cnn.py  # riêng backbone CNN
   các thiết bị — đây là một hạn chế đã biết.
 - App Android (inference) lấy 200 mẫu acc thô gần nhất ở tần số gốc, gyro/mag được
   căn đồng bộ theo dấu thời gian acc → khớp với cách dựng cửa sổ khi huấn luyện.
-- `ve_bieu_do.py` đọc `processed/*.npy` cho biểu đồ phân bố và `data/*.csv` cho biểu đồ
+- `plot_charts.py` đọc `processed/*.npy` cho biểu đồ phân bố và `data/*.csv` cho biểu đồ
   tín hiệu thô; đổi user minh họa qua hằng số `USER_DON` hoặc cờ `--user`.

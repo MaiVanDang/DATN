@@ -54,7 +54,7 @@ Chuyển dữ liệu CSV thô thành các cửa sổ chuẩn hóa `.npy` (quán 
   - `dataset_table(data_dir)`: kiểm kê window/session mỗi user.
   - `model_table()`: **số tham số, kích thước (MB), độ trễ CPU** của 3 kiến trúc (cnn/convlstm/convlstm_bi) — nguồn của **Bảng 4.1**. Latency đo bằng 20 lần forward, batch 10 cửa sổ.
 
-## 1.4. `ve_bieu_do.py` — Sinh toàn bộ biểu đồ minh họa (mục 3.4.1)
+## 1.4. `plot_charts.py` — Sinh toàn bộ biểu đồ minh họa (mục 3.4.1)
 Gom mọi biểu đồ vào một script, **dùng chung hàm với `step2_preprocess`** (đúng ngưỡng, đúng logic phân đoạn). Cờ `SAVE`/`SHOW` cho phép chạy CLI (lưu file) hoặc notebook (xem inline).
 
 | Hàm | Nhiệm vụ |
@@ -69,7 +69,7 @@ Gom mọi biểu đồ vào một script, **dùng chung hàm với `step2_prepro
 | `find_gaps(df)` / `report_gaps(...)` | Phát hiện điểm gián đoạn **giống hệt** `split_segments`, in cách tính số mẫu/thời lượng/số khoảng trống (giải trình con số trong báo cáo) |
 | `plot_phan_doan(...)` | **Hình 3.4.1**: vẽ tín hiệu thật, tô đoạn giữ/loại/khoảng trống, phóng to một khoảng trống. Tham số `--pd_user user4 --pd_session 6 --pd_activity sitting` chỉ định nguồn vẽ |
 
-*(`ve_bieu_do.ipynb` là phiên bản notebook của file này để xem/lưu từng biểu đồ linh hoạt.)*
+*(`plot_charts.ipynb` là phiên bản notebook của file này để xem/lưu từng biểu đồ linh hoạt.)*
 
 ## 1.5. `export/export_tflite.py` & `export/export_tflite_cnn.py` — Xuất mô hình sang Android
 Chuyển checkpoint PyTorch (`backbone.pt`) → mô hình **TFLite** nhúng vào app.

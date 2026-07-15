@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ve_bieu_do.py — Sinh toàn bộ biểu đồ minh họa dữ liệu cho ĐATN BioAuth.
+plot_charts.py — Sinh toàn bộ biểu đồ minh họa dữ liệu cho ĐATN BioAuth.
 
 Gộp 3 nhóm biểu đồ vào một script, dùng chung hàm với step2_preprocess.py:
 
@@ -20,7 +20,7 @@ Gộp 3 nhóm biểu đồ vào một script, dùng chung hàm với step2_prepr
        4a_window_truoc.png / 4b_window_zscore_sau.png một cửa sổ 4s
 
 Chạy:
-    python ve_bieu_do.py --data_dir ./data --proc_dir ./processed --out ./plots
+    python plot_charts.py --data_dir ./data --proc_dir ./processed --out ./plots
 """
 
 import argparse
